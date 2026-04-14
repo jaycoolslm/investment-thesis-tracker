@@ -142,6 +142,12 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 | S4 | May 5-9 | Dashboard polish (search/filter/badges) + bulk upload | |
 | S5 | May 12-16 | Integration testing + ship prep | |
 
+## Git Workflow
+
+- **Commit after completing each sprint.** One commit per sprint with a summary of what was built.
+- **Commit again after any post-sprint iterations** (bug fixes, architecture changes like WS→SSE). Separate commit from the sprint commit so the history shows what was planned vs. what was fixed.
+- Commit messages should summarize the "what" and "why", not list every file changed.
+
 ## Code Conventions
 
 - TypeScript strict mode throughout (backend: NodeNext modules, frontend: bundler resolution)
