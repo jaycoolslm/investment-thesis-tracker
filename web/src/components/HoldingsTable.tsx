@@ -97,9 +97,10 @@ function getColumns(onDelete?: (id: string) => void) {
 interface HoldingsTableProps {
   data: Holding[];
   onDelete?: (id: string) => void;
+  onRowClick?: (id: string) => void;
 }
 
-export function HoldingsTable({ data, onDelete }: HoldingsTableProps) {
+export function HoldingsTable({ data, onDelete, onRowClick }: HoldingsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "ticker", desc: false },
   ]);
@@ -147,6 +148,7 @@ export function HoldingsTable({ data, onDelete }: HoldingsTableProps) {
             <tr
               key={row.id}
               className="border-b border-brand-100 last:border-b-0 hover:bg-brand-100 cursor-pointer transition-colors"
+              onClick={() => onRowClick?.(row.original.id)}
             >
               {row.getVisibleCells().map((cell) => (
                 <td key={cell.id} className="px-3 py-3">

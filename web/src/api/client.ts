@@ -71,18 +71,45 @@ export interface ThesisPillar {
   updatedAt: string;
 }
 
+export interface Valuation {
+  methodology: string;
+  currentPrice: number | null;
+  upsideCase: string | null;
+  baseCase: string | null;
+  downsideCase: string | null;
+}
+
+export interface Risk {
+  description: string;
+  severity: "high" | "medium" | "low";
+}
+
+export interface Source {
+  title: string;
+  url: string | null;
+  type: "web" | "broker_research" | "filing" | "news" | null;
+}
+
 export interface Thesis {
   id: string;
   holdingId: string;
   summary: string | null;
   qualityAssess: string | null;
-  valuation: unknown;
-  assumptions: unknown;
-  risks: unknown;
-  sources: unknown;
+  valuation: Valuation | null;
+  assumptions: string[] | null;
+  risks: Risk[] | null;
+  sources: Source[] | null;
   createdAt: string;
   updatedAt: string;
   pillars: ThesisPillar[];
+}
+
+export interface ThesisUpdateInput {
+  summary?: string;
+  qualityAssess?: string;
+  valuation?: Valuation;
+  assumptions?: string[];
+  risks?: Risk[];
 }
 
 export interface Document {
@@ -136,4 +163,65 @@ export async function uploadDocument(
 
 export function getDocuments(holdingId: string): Promise<Document[]> {
   return apiFetch(`/api/holdings/${holdingId}/documents`);
+}
+
+export function deleteDocument(
+  holdingId: string,
+  documentId: string,
+): Promise<void> {
+  return apiFetch(`/api/holdings/${holdingId}/documents/${documentId}`, {
+    method: "DELETE",
+  });
+}
+
+// Thesis editing
+
+export function updateThesis(
+  thesisId: string,
+  data: ThesisUpdateInput,
+): Promise<Thesis> {
+  return apiFetch(`/api/theses/${thesisId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function createPillar(
+  thesisId: string,
+  data: { title: string; body?: string },
+): Promise<ThesisPillar> {
+  return apiFetch(`/api/theses/${thesisId}/pillars`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updatePillar(
+  thesisId: string,
+  pillarId: string,
+  data: { title?: string; body?: string },
+): Promise<ThesisPillar> {
+  return apiFetch(`/api/theses/${thesisId}/pillars/${pillarId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deletePillar(
+  thesisId: string,
+  pillarId: string,
+): Promise<void> {
+  return apiFetch(`/api/theses/${thesisId}/pillars/${pillarId}`, {
+    method: "DELETE",
+  });
+}
+
+export function reorderPillars(
+  thesisId: string,
+  pillarIds: string[],
+): Promise<ThesisPillar[]> {
+  return apiFetch(`/api/theses/${thesisId}/pillars/reorder`, {
+    method: "PATCH",
+    body: JSON.stringify({ pillarIds }),
+  });
 }

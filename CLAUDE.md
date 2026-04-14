@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Sprint 2 complete (Apr 21-25). AI agent + single thesis generation end-to-end. ThesisAgent wrapper, generation service, SSE progress streaming, Add Holding modal, all working. Starting Sprint 3 (thesis view + editing + broker research upload).
+Sprint 3 complete (Apr 28-May 1). Thesis detail page with 5-tab navigation, inline editing (Tiptap for narrative, plain inputs for single-line fields), Notion-style pillar blocks, assumptions/risks editors, broker research upload panel, benchmark editing. React Router for page navigation. Starting Sprint 4 (dashboard polish + bulk upload).
 
 ## Key Documents
 
@@ -68,8 +68,8 @@ thesis-tracking/
     routes/
       holdings.ts              — Holdings CRUD (GET/POST/PUT/DELETE)
       generation.ts            — POST /api/holdings/:id/generate + GET /api/holdings/:id/progress (SSE)
-      theses.ts                — GET /api/holdings/:id/thesis (fetch thesis + pillars)
-      documents.ts             — POST/GET /api/holdings/:id/documents (file upload)
+      theses.ts                — GET thesis + PATCH thesis + pillar CRUD + reorder
+      documents.ts             — POST/GET/DELETE /api/holdings/:id/documents
     agent/
       codex-agent.ts           — ThesisAgent wrapper around @openai/codex-sdk
       prompts.ts               — buildGenerationPrompt() + GenerationInput interface
@@ -89,28 +89,48 @@ thesis-tracking/
     tsconfig.json
     index.html
     src/
-      main.tsx                 — Entry point, QueryClientProvider
-      App.tsx                  — Top bar + modal + progress flow + toasts
+      main.tsx                 — Entry point, QueryClientProvider, BrowserRouter
+      App.tsx                  — React Router routes (Dashboard + ThesisDetailPage)
       globals.css              — Tailwind v4 @theme tokens (brand, accent, status colours)
       pages/
-        Dashboard.tsx           — Holdings list with loading/empty/error states
+        Dashboard.tsx           — Holdings list with loading/empty/error states + row navigation
+        ThesisDetailPage.tsx    — Thesis view: header, 5-tab Radix Tabs, all editors
       components/
-        HoldingsTable.tsx       — TanStack Table, 7 columns, sorting, delete action
+        Layout.tsx              — Shared header + Outlet + modals + toasts
+        HoldingsTable.tsx       — TanStack Table, 7 columns, sorting, row click, delete
         AddHoldingModal.tsx     — Radix Dialog: ticker, direction, benchmark, bullets, file upload
         GenerationProgress.tsx  — Multi-step progress indicator (SSE-driven)
         FileDropZone.tsx        — Drag-and-drop PDF/DOCX upload zone
+        EditableText.tsx        — Click-to-edit: Tiptap (multiline) or input (singleline), auto-save
+        ConfirmDialog.tsx       — Reusable Radix AlertDialog wrapper
+        SeverityBadge.tsx       — High/Medium/Low risk badge with editable Select
         Toast.tsx               — Toast notification container
         StatusBadge.tsx         — Strengthened/Weakened/Unchanged badges
         DirectionBadge.tsx      — Long/Short badges
         LoadingSkeleton.tsx     — 8-row pulsing skeleton
         EmptyState.tsx          — "No holdings yet" prompt
+        thesis/
+          SummaryEditor.tsx     — Thesis summary Tiptap editor
+          PillarEditor.tsx      — Pillar list with add/reorder
+          PillarCard.tsx        — Single pillar: title + body editing + move + delete
+          QualityEditor.tsx     — Quality assessment Tiptap editor
+          ValuationEditor.tsx   — Valuation key-value pairs
+          AssumptionsEditor.tsx — Editable assumption rows (JSONB array)
+          RisksEditor.tsx       — Risk rows with severity dropdown (JSONB array)
+          SourcesList.tsx       — Read-only web sources list
+          BrokerResearchPanel.tsx — File list + upload drop zone + delete
+          BenchmarkEditor.tsx   — Benchmark index Radix Select dropdown
       hooks/
         useHoldings.ts          — TanStack Query: useHoldings, useCreateHolding, useDeleteHolding
+        useThesis.ts            — useThesis + useHolding query hooks
+        useThesisMutations.ts   — updateThesis, CRUD pillars, reorder
+        useDocuments.ts         — useDocuments, useUploadDocument, useDeleteDocument
+        useAutoSave.ts          — Debounced save with status tracking
         useGenerateThesis.ts    — Mutation: create holding → upload files
         useGenerationProgress.ts — SSE progress tracking (fires generation after EventSource connects)
         useToast.ts             — Toast state management
       api/
-        client.ts               — Typed fetch: holdings, theses, documents, generation
+        client.ts               — Typed fetch: holdings, theses, pillars, documents, generation
 ```
 
 ## UX Constraints
@@ -138,7 +158,7 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 |--------|------|-------|--------|
 | S1 | Apr 14-18 | Foundation — Docker, DB schema, Express + React scaffold, dashboard shell | Done |
 | S2 | Apr 21-25 | AI agent + single thesis generation end-to-end | Done |
-| S3 | Apr 28-May 1 | Thesis view + editing + broker research upload | |
+| S3 | Apr 28-May 1 | Thesis view + editing + broker research upload | Done |
 | S4 | May 5-9 | Dashboard polish (search/filter/badges) + bulk upload | |
 | S5 | May 12-16 | Integration testing + ship prep | |
 
@@ -147,6 +167,20 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 - **Commit after completing each sprint.** One commit per sprint with a summary of what was built.
 - **Commit again after any post-sprint iterations** (bug fixes, architecture changes like WS→SSE). Separate commit from the sprint commit so the history shows what was planned vs. what was fixed.
 - Commit messages should summarize the "what" and "why", not list every file changed.
+
+## Planning Requirements
+
+When creating a sprint plan or implementation plan, **always search for the latest documentation** for every technology being used. This is critical because:
+- Library APIs change between versions (e.g., Zod v3 → v4, React Router v6 → v7)
+- The plan must reference correct, current APIs — not stale knowledge
+- Incorrect API usage from outdated docs causes implementation bugs
+
+**Process:**
+1. Identify every library/framework touched by the sprint
+2. Web search for latest docs for each (use current year in queries)
+3. Fetch key doc pages (setup guides, API references) for implementation-critical details
+4. Save doc URLs and key API snippets in the plan under a "Documentation References" section
+5. During implementation, consult these docs — not memory — for API signatures and patterns
 
 ## Code Conventions
 

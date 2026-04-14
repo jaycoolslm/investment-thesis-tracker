@@ -1,15 +1,18 @@
+import { useNavigate, useOutletContext } from "react-router";
 import { useHoldings, useDeleteHolding } from "../hooks/useHoldings.ts";
 import { HoldingsTable } from "../components/HoldingsTable.tsx";
 import { LoadingSkeleton } from "../components/LoadingSkeleton.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 
-interface DashboardProps {
-  onAddHolding?: () => void;
+interface LayoutContext {
+  onAddHolding: () => void;
 }
 
-export function Dashboard({ onAddHolding }: DashboardProps) {
+export function Dashboard() {
+  const { onAddHolding } = useOutletContext<LayoutContext>();
   const { data: holdings, isLoading, isError, error } = useHoldings();
   const deleteMutation = useDeleteHolding();
+  const navigate = useNavigate();
 
   return (
     <div>
@@ -35,6 +38,7 @@ export function Dashboard({ onAddHolding }: DashboardProps) {
         <HoldingsTable
           data={holdings}
           onDelete={(id) => deleteMutation.mutate(id)}
+          onRowClick={(id) => navigate(`/holdings/${id}`)}
         />
       )}
     </div>

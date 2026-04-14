@@ -1,8 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
 import { mkdirSync } from "fs";
+import { unlink } from "fs/promises";
 import * as z from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { documents, holdings } from "../db/schema.js";
 
@@ -96,4 +97,40 @@ documentsRouter.get("/holdings/:id/documents", async (req, res) => {
     .where(eq(documents.holdingId, idResult.data));
 
   res.json(docs);
+});
+
+// DELETE /api/holdings/:id/documents/:docId
+documentsRouter.delete("/holdings/:id/documents/:docId", async (req, res) => {
+  const idResult = z.string().uuid().safeParse(req.params.id);
+  const docIdResult = z.string().uuid().safeParse(req.params.docId);
+  if (!idResult.success || !docIdResult.success) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.id, docIdResult.data),
+        eq(documents.holdingId, idResult.data),
+      ),
+    );
+
+  if (!doc) {
+    res.status(404).json({ error: "Document not found" });
+    return;
+  }
+
+  await db.delete(documents).where(eq(documents.id, docIdResult.data));
+
+  // Best-effort file cleanup
+  try {
+    await unlink(doc.filePath);
+  } catch {
+    // File may already be gone — not critical
+  }
+
+  res.status(204).end();
 });
