@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand */
+  --color-brand-900: #0F172A;
+  --color-brand-800: #1E293B;
+  --color-brand-700: #334155;
+  --color-brand-500: #64748B;
+  --color-brand-200: #E2E8F0;
+  --color-brand-100: #F1F5F9;
+  --color-brand-50: #F8FAFC;
+
+  /* Accent */
+  --color-accent-700: #1D4ED8;
+  --color-accent-600: #2563EB;
+  --color-accent-100: #DBEAFE;
+  --color-accent-50: #EFF6FF;
+
+  /* Status — thesis impact */
+  --color-status-green-700: #15803D;
+  --color-status-green-100: #DCFCE7;
+  --color-status-red-700: #B91C1C;
+  --color-status-red-100: #FEE2E2;
+  --color-status-grey-700: #4B5563;
+  --color-status-grey-100: #F3F4F6;
+  --color-status-blue-700: #1D4ED8;
+  --color-status-blue-100: #DBEAFE;
+
+  /* Severity — risk badges */
+  --color-severity-high-text: #991B1B;
+  --color-severity-high-bg: #FEE2E2;
+  --color-severity-medium-text: #92400E;
+  --color-severity-medium-bg: #FEF3C7;
+  --color-severity-low-text: #166534;
+  --color-severity-low-bg: #DCFCE7;
+
+  /* Surface */
+  --color-surface-page: #F8FAFC;
+  --color-surface-card: #FFFFFF;
+
+  /* Feedback */
+  --color-error-text: #B91C1C;
+  --color-error-bg: #FEE2E2;
+  --color-success-text: #15803D;
+  --color-success-bg: #DCFCE7;
+
+  /* Fonts */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
+body {
+  background-color: var(--color-surface-page);
+  color: var(--color-brand-700);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
