@@ -1,18 +1,53 @@
+import { useState } from "react";
 import { useNavigate, useOutletContext } from "react-router";
 import { useHoldings, useDeleteHolding } from "../hooks/useHoldings.ts";
 import { HoldingsTable } from "../components/HoldingsTable.tsx";
 import { LoadingSkeleton } from "../components/LoadingSkeleton.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
+import { SearchBar } from "../components/SearchBar.tsx";
+import { FilterChips } from "../components/FilterChips.tsx";
 
 interface LayoutContext {
   onAddHolding: () => void;
+  onBulkUpload?: () => void;
 }
 
 export function Dashboard() {
-  const { onAddHolding } = useOutletContext<LayoutContext>();
+  const { onAddHolding, onBulkUpload } = useOutletContext<LayoutContext>();
   const { data: holdings, isLoading, isError, error } = useHoldings();
   const deleteMutation = useDeleteHolding();
   const navigate = useNavigate();
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilters, setActiveFilters] = useState<string[]>(["All"]);
+
+  function handleFilterToggle(filter: string) {
+    setActiveFilters((prev) => {
+      if (filter === "All") return ["All"];
+
+      let next = prev.filter((f) => f !== "All");
+
+      const directionChips = ["Long", "Short"];
+      const isDirection = directionChips.includes(filter);
+
+      if (next.includes(filter)) {
+        next = next.filter((f) => f !== filter);
+      } else {
+        if (isDirection) {
+          // Direction chips are mutually exclusive
+          next = next.filter((f) => !directionChips.includes(f));
+        }
+        next.push(filter);
+      }
+
+      return next.length === 0 ? ["All"] : next;
+    });
+  }
+
+  function handleClearFilters() {
+    setSearchQuery("");
+    setActiveFilters(["All"]);
+  }
 
   return (
     <div>
@@ -31,15 +66,26 @@ export function Dashboard() {
       )}
 
       {holdings && holdings.length === 0 && (
-        <EmptyState onAddHolding={onAddHolding} />
+        <EmptyState onAddHolding={onAddHolding} onBulkUpload={onBulkUpload} />
       )}
 
       {holdings && holdings.length > 0 && (
-        <HoldingsTable
-          data={holdings}
-          onDelete={(id) => deleteMutation.mutate(id)}
-          onRowClick={(id) => navigate(`/holdings/${id}`)}
-        />
+        <>
+          <SearchBar value={searchQuery} onChange={setSearchQuery} />
+          <FilterChips
+            activeFilters={activeFilters}
+            onToggle={handleFilterToggle}
+          />
+          <div className="mt-4">
+            <HoldingsTable
+              data={holdings}
+              onDelete={(id) => deleteMutation.mutate(id)}
+              onRowClick={(id) => navigate(`/holdings/${id}`)}
+              globalFilter={{ searchQuery, activeFilters }}
+              onClearFilters={handleClearFilters}
+            />
+          </div>
+        </>
       )}
     </div>
   );

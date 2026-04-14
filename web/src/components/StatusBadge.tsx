@@ -6,6 +6,7 @@ const statusStyles = {
   unchanged: "bg-status-grey-100 text-status-grey-700",
   generating: "bg-status-blue-100 text-status-blue-700 animate-pulse",
   new: "border border-status-blue-700 text-status-blue-700",
+  failed: "bg-error-bg text-error-text",
 } as const;
 
 const statusLabels = {
@@ -14,6 +15,7 @@ const statusLabels = {
   unchanged: "Unchanged",
   generating: "Generating",
   new: "New",
+  failed: "Failed",
 } as const;
 
 type StatusType = keyof typeof statusStyles;

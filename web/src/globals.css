@@ -41,8 +41,13 @@
   /* Feedback */
   --color-error-text: #B91C1C;
   --color-error-bg: #FEE2E2;
+  --color-error-border: #FECACA;
+  --color-warning-text: #92400E;
+  --color-warning-bg: #FEF3C7;
+  --color-warning-border: #FDE68A;
   --color-success-text: #15803D;
   --color-success-bg: #DCFCE7;
+  --color-success-border: #BBF7D0;
 
   /* Fonts */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;

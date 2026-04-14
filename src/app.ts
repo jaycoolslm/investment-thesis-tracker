@@ -6,6 +6,7 @@ import { holdingsRouter } from "./routes/holdings.js";
 import { generationRouter } from "./routes/generation.js";
 import { thesesRouter } from "./routes/theses.js";
 import { documentsRouter } from "./routes/documents.js";
+import { bulkRouter } from "./routes/bulk.js";
 
 export function createApp() {
   const app = express();
@@ -17,6 +18,7 @@ export function createApp() {
   app.use("/api", generationRouter);
   app.use("/api", thesesRouter);
   app.use("/api", documentsRouter);
+  app.use("/api", bulkRouter);
 
   app.get("/api/health", async (_req, res) => {
     try {

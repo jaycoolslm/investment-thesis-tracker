@@ -2,8 +2,10 @@ import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   getSortedRowModel,
   useReactTable,
+  type Row,
   type SortingState,
 } from "@tanstack/react-table";
 import { useState } from "react";
@@ -13,6 +15,22 @@ import { StatusBadge } from "./StatusBadge.tsx";
 import { DirectionBadge } from "./DirectionBadge.tsx";
 
 const columnHelper = createColumnHelper<Holding>();
+
+function SortAscIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="inline-block ml-1">
+      <path d="M7 3L11 8H3L7 3Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function SortDescIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="inline-block ml-1">
+      <path d="M7 11L3 6H11L7 11Z" fill="currentColor" />
+    </svg>
+  );
+}
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "--";
@@ -94,13 +112,72 @@ function getColumns(onDelete?: (id: string) => void) {
   ];
 }
 
+export interface DashboardFilter {
+  searchQuery: string;
+  activeFilters: string[];
+}
+
+function holdingsGlobalFilterFn(
+  row: Row<Holding>,
+  _columnId: string,
+  filterValue: DashboardFilter,
+): boolean {
+  const { searchQuery, activeFilters } = filterValue;
+  const holding = row.original;
+
+  // Search filter: match ticker or companyName (case-insensitive, substring)
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    const matchesTicker = holding.ticker.toLowerCase().includes(q);
+    const matchesCompany = holding.companyName.toLowerCase().includes(q);
+    if (!matchesTicker && !matchesCompany) return false;
+  }
+
+  // Chip filters (skip if "All" is active or no filters)
+  if (activeFilters.length === 0 || activeFilters.includes("All")) {
+    return true;
+  }
+
+  // Direction filter
+  const directionFilters = activeFilters.filter(
+    (f) => f === "Long" || f === "Short",
+  );
+  if (directionFilters.length > 0) {
+    if (!directionFilters.some((f) => f.toLowerCase() === holding.direction)) {
+      return false;
+    }
+  }
+
+  // Status (latestImpact) filter
+  const statusFilters = activeFilters.filter(
+    (f) => f === "Strengthened" || f === "Weakened" || f === "Unchanged",
+  );
+  if (statusFilters.length > 0) {
+    if (
+      !statusFilters.some((f) => f.toLowerCase() === holding.latestImpact)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 interface HoldingsTableProps {
   data: Holding[];
   onDelete?: (id: string) => void;
   onRowClick?: (id: string) => void;
+  globalFilter?: DashboardFilter;
+  onClearFilters?: () => void;
 }
 
-export function HoldingsTable({ data, onDelete, onRowClick }: HoldingsTableProps) {
+export function HoldingsTable({
+  data,
+  onDelete,
+  onRowClick,
+  globalFilter,
+  onClearFilters,
+}: HoldingsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "ticker", desc: false },
   ]);
@@ -110,10 +187,15 @@ export function HoldingsTable({ data, onDelete, onRowClick }: HoldingsTableProps
   const table = useReactTable({
     data,
     columns,
-    state: { sorting },
+    state: {
+      sorting,
+      globalFilter: globalFilter ?? { searchQuery: "", activeFilters: ["All"] },
+    },
     onSortingChange: setSorting,
+    globalFilterFn: holdingsGlobalFilterFn,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
   });
 
   return (
@@ -125,6 +207,13 @@ export function HoldingsTable({ data, onDelete, onRowClick }: HoldingsTableProps
               {headerGroup.headers.map((header) => (
                 <th
                   key={header.id}
+                  aria-sort={
+                    header.column.getIsSorted() === "asc"
+                      ? "ascending"
+                      : header.column.getIsSorted() === "desc"
+                        ? "descending"
+                        : "none"
+                  }
                   className={clsx(
                     "px-3 py-3 text-left text-xs font-medium text-brand-500 uppercase tracking-wider",
                     header.column.getCanSort() && "cursor-pointer select-none",
@@ -133,10 +222,8 @@ export function HoldingsTable({ data, onDelete, onRowClick }: HoldingsTableProps
                 >
                   <span className="flex items-center gap-1">
                     {flexRender(header.column.columnDef.header, header.getContext())}
-                    {{
-                      asc: " \u2191",
-                      desc: " \u2193",
-                    }[header.column.getIsSorted() as string] ?? null}
+                    {header.column.getIsSorted() === "asc" && <SortAscIcon />}
+                    {header.column.getIsSorted() === "desc" && <SortDescIcon />}
                   </span>
                 </th>
               ))}
@@ -157,6 +244,27 @@ export function HoldingsTable({ data, onDelete, onRowClick }: HoldingsTableProps
               ))}
             </tr>
           ))}
+          {table.getRowModel().rows.length === 0 && (
+            <tr>
+              <td colSpan={columns.length} className="py-16 text-center">
+                <p className="text-lg font-medium text-brand-800">
+                  No holdings match your search.
+                </p>
+                <p className="text-sm text-brand-500 mt-2">
+                  Try a different ticker or clear your filters.
+                </p>
+                {onClearFilters && (
+                  <button
+                    type="button"
+                    onClick={onClearFilters}
+                    className="mt-4 text-sm text-accent-600 hover:text-accent-700 font-medium transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

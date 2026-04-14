@@ -45,10 +45,10 @@ export class ThesisAgent {
       additionalDirectories:
         input.researchFilePaths.length > 0 ? ["/data/documents"] : [],
       sandboxMode: "read-only",
-      webSearchMode: "disabled",    // TODO: re-enable for production
-      networkAccessEnabled: false,   // TODO: re-enable for production
+      webSearchMode: "live",
+      networkAccessEnabled: true,
       approvalPolicy: "never",
-      modelReasoningEffort: "low",   // TODO: set to "high" for production
+      modelReasoningEffort: "high",
       skipGitRepoCheck: true,
     });
 

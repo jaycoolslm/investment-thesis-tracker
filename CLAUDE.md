@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Sprint 3 complete (Apr 28-May 1). Thesis detail page with 5-tab navigation, inline editing (Tiptap for narrative, plain inputs for single-line fields), Notion-style pillar blocks, assumptions/risks editors, broker research upload panel, benchmark editing. React Router for page navigation. Starting Sprint 4 (dashboard polish + bulk upload).
+Sprint 4 complete (May 5-9). Dashboard has real-time search (Cmd+K), filter chips (direction + status), SVG sort icons with aria-sort, and "failed" status badge. Bulk upload: .xlsx/.csv parsing with ExcelJS, validation preview table with inline editing, BullMQ job queue (concurrency 3, 2 retry attempts), SSE progress banner with ETA, results modal with per-row retry. Codex agent now uses web search (live) and high reasoning effort. Starting Sprint 5 (integration testing + ship prep).
 
 ## Key Documents
 
@@ -24,8 +24,9 @@ Read these before making architectural or UX decisions:
 - **Frontend**: React 19 + Vite 8 + TanStack Table + TanStack Query + Tailwind CSS v4 + Radix UI + Tiptap
 - **Database**: PostgreSQL 16 + Drizzle ORM 0.45 (pg driver)
 - **Validation**: Zod v4 (env config, API input, AI output)
-- **Jobs**: BullMQ + Redis
-- **AI**: Codex CLI SDK (`@openai/codex-sdk`) → Azure OpenAI (GPT 5.1 Codex)
+- **Jobs**: BullMQ + Redis (concurrency 3, 2 retry attempts with exponential backoff)
+- **AI**: Codex CLI SDK (`@openai/codex-sdk`) → Azure OpenAI (GPT 5.1 Codex, web search live, high reasoning)
+- **File parsing**: ExcelJS (read/write .xlsx + .csv for bulk upload + template generation)
 - **Containers**: Docker Compose (api + postgres + redis)
 - **Package manager**: pnpm (separate package.json for root backend + web/ frontend)
 
@@ -70,12 +71,19 @@ thesis-tracking/
       generation.ts            — POST /api/holdings/:id/generate + GET /api/holdings/:id/progress (SSE)
       theses.ts                — GET thesis + PATCH thesis + pillar CRUD + reorder
       documents.ts             — POST/GET/DELETE /api/holdings/:id/documents
+      bulk.ts                  — Bulk upload: parse/preview, start, SSE progress, cancel, retry, template
     agent/
-      codex-agent.ts           — ThesisAgent wrapper around @openai/codex-sdk
+      codex-agent.ts           — ThesisAgent wrapper around @openai/codex-sdk (web search live, high reasoning)
       prompts.ts               — buildGenerationPrompt() + GenerationInput interface
       schemas.ts               — Zod schemas for AI output (thesis, pillars, risks, etc.)
     services/
       thesis-generation.ts     — Orchestrates: validate → agent call → persist in transaction
+      bulk-generation.ts       — Bulk orchestration: parse → cache rows in Redis → create holdings → enqueue
+      file-parser.ts           — ExcelJS .xlsx/.csv parsing + Zod per-row validation
+      template-generator.ts    — Generate downloadable .xlsx template with ExcelJS
+    jobs/
+      queue.ts                 — BullMQ queue + Redis connection + enqueueBatch/cancelBatch helpers
+      bulk-worker.ts           — Worker (concurrency 3): generates theses, tracks batch state in Redis
     db/
       schema.ts                — 5 tables + 3 enums + relations
       index.ts                 — Drizzle client
@@ -93,22 +101,28 @@ thesis-tracking/
       App.tsx                  — React Router routes (Dashboard + ThesisDetailPage)
       globals.css              — Tailwind v4 @theme tokens (brand, accent, status colours)
       pages/
-        Dashboard.tsx           — Holdings list with loading/empty/error states + row navigation
+        Dashboard.tsx           — Holdings list with search, filter chips, loading/empty/error states
         ThesisDetailPage.tsx    — Thesis view: header, 5-tab Radix Tabs, all editors
       components/
-        Layout.tsx              — Shared header + Outlet + modals + toasts
-        HoldingsTable.tsx       — TanStack Table, 7 columns, sorting, row click, delete
+        Layout.tsx              — Shared header + Outlet + modals + toasts + bulk state management
+        HoldingsTable.tsx       — TanStack Table, 7 columns, sorting, globalFilterFn, row click, delete
+        SearchBar.tsx           — Search input with Cmd+K shortcut, clear button, focus states
+        FilterChips.tsx         — All/Long/Short/Strengthened/Weakened/Unchanged toggle chips
         AddHoldingModal.tsx     — Radix Dialog: ticker, direction, benchmark, bullets, file upload
+        BulkUploadModal.tsx     — Multi-step: file drop → validation preview table → generate
+        BulkValidationTable.tsx — TanStack Table preview with inline editing for error rows
+        BulkProgressBanner.tsx  — Persistent progress bar with ETA and cancel (between header + main)
+        BulkResultsModal.tsx    — Post-completion: failure table with per-row retry
         GenerationProgress.tsx  — Multi-step progress indicator (SSE-driven)
-        FileDropZone.tsx        — Drag-and-drop PDF/DOCX upload zone
+        FileDropZone.tsx        — Configurable drag-and-drop upload zone (PDF/DOCX or XLSX/CSV)
         EditableText.tsx        — Click-to-edit: Tiptap (multiline) or input (singleline), auto-save
         ConfirmDialog.tsx       — Reusable Radix AlertDialog wrapper
         SeverityBadge.tsx       — High/Medium/Low risk badge with editable Select
         Toast.tsx               — Toast notification container
-        StatusBadge.tsx         — Strengthened/Weakened/Unchanged badges
+        StatusBadge.tsx         — Strengthened/Weakened/Unchanged/Generating/New/Failed badges
         DirectionBadge.tsx      — Long/Short badges
         LoadingSkeleton.tsx     — 8-row pulsing skeleton
-        EmptyState.tsx          — "No holdings yet" prompt
+        EmptyState.tsx          — "No holdings yet" with Add Holding + Upload Spreadsheet buttons
         thesis/
           SummaryEditor.tsx     — Thesis summary Tiptap editor
           PillarEditor.tsx      — Pillar list with add/reorder
@@ -128,9 +142,13 @@ thesis-tracking/
         useAutoSave.ts          — Debounced save with status tracking
         useGenerateThesis.ts    — Mutation: create holding → upload files
         useGenerationProgress.ts — SSE progress tracking (fires generation after EventSource connects)
+        useBulkUpload.ts        — TanStack Query mutation for bulk file upload
+        useBulkProgress.ts      — SSE subscription for bulk generation progress + ETA
+        useBulkRetry.ts         — Mutation for retrying failed bulk holdings
         useToast.ts             — Toast state management
       api/
         client.ts               — Typed fetch: holdings, theses, pillars, documents, generation
+        bulk.ts                 — Bulk API: upload, start, cancel, retry, template download
 ```
 
 ## UX Constraints
@@ -159,7 +177,7 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 | S1 | Apr 14-18 | Foundation — Docker, DB schema, Express + React scaffold, dashboard shell | Done |
 | S2 | Apr 21-25 | AI agent + single thesis generation end-to-end | Done |
 | S3 | Apr 28-May 1 | Thesis view + editing + broker research upload | Done |
-| S4 | May 5-9 | Dashboard polish (search/filter/badges) + bulk upload | |
+| S4 | May 5-9 | Dashboard polish (search/filter/badges) + bulk upload | Done |
 | S5 | May 12-16 | Integration testing + ship prep | |
 
 ## Git Workflow
