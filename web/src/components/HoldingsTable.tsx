@@ -148,13 +148,27 @@ function holdingsGlobalFilterFn(
     }
   }
 
-  // Status (latestImpact) filter
-  const statusFilters = activeFilters.filter(
+  // Impact filter
+  const impactFilters = activeFilters.filter(
     (f) => f === "Strengthened" || f === "Weakened" || f === "Unchanged",
   );
-  if (statusFilters.length > 0) {
+  if (impactFilters.length > 0) {
     if (
-      !statusFilters.some((f) => f.toLowerCase() === holding.latestImpact)
+      !impactFilters.some((f) => f.toLowerCase() === holding.latestImpact)
+    ) {
+      return false;
+    }
+  }
+
+  // Holding status filter (active/closed/paused)
+  const holdingStatusFilters = activeFilters.filter(
+    (f) => f === "Active" || f === "Closed" || f === "Paused",
+  );
+  if (holdingStatusFilters.length > 0) {
+    if (
+      !holdingStatusFilters.some(
+        (f) => f.toLowerCase() === holding.status,
+      )
     ) {
       return false;
     }

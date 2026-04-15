@@ -23,9 +23,23 @@ const updateHoldingSchema = z.object({
 
 const uuidSchema = z.string().uuid();
 
-// GET /api/holdings
-holdingsRouter.get("/holdings", async (_req, res) => {
-  const rows = await db.select().from(holdings).orderBy(holdings.ticker);
+// GET /api/holdings?status=active|closed|paused|all (default: all)
+holdingsRouter.get("/holdings", async (req, res) => {
+  const statusParam = z
+    .enum(["active", "closed", "paused", "all"])
+    .default("all")
+    .safeParse(req.query.status);
+
+  const status = statusParam.success ? statusParam.data : "all";
+
+  const query = db.select().from(holdings);
+  const rows =
+    status === "all"
+      ? await query.orderBy(holdings.ticker)
+      : await query
+          .where(eq(holdings.status, status))
+          .orderBy(holdings.ticker);
+
   res.json(rows);
 });
 

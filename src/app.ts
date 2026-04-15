@@ -1,3 +1,4 @@
+import path from "node:path";
 import express from "express";
 import cors from "cors";
 import { sql } from "drizzle-orm";
@@ -7,6 +8,7 @@ import { generationRouter } from "./routes/generation.js";
 import { thesesRouter } from "./routes/theses.js";
 import { documentsRouter } from "./routes/documents.js";
 import { bulkRouter } from "./routes/bulk.js";
+import { config } from "./config.js";
 
 export function createApp() {
   const app = express();
@@ -36,6 +38,17 @@ export function createApp() {
       });
     }
   });
+
+  // In production, serve the Vite-built frontend as static files
+  if (config.NODE_ENV === "production") {
+    const staticDir = path.resolve(import.meta.dirname, "../web/dist");
+    app.use(express.static(staticDir));
+
+    // SPA fallback — Express 5 requires named wildcard
+    app.get("/{*splat}", (_req, res) => {
+      res.sendFile(path.join(staticDir, "index.html"));
+    });
+  }
 
   return app;
 }

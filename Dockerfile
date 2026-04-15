@@ -17,7 +17,7 @@ COPY src/ ./src/
 EXPOSE 3001
 CMD ["pnpm", "dev"]
 
-# Build target: compile TypeScript
+# Build target: compile backend + frontend
 FROM base AS builder
 
 RUN pnpm install --frozen-lockfile
@@ -26,7 +26,11 @@ COPY tsconfig.json ./
 COPY src/ ./src/
 RUN pnpm build
 
-# Production target: slim image with compiled JS
+# Build frontend
+COPY web/ ./web/
+RUN cd web && pnpm install --frozen-lockfile && pnpm build
+
+# Production target: slim image with compiled backend + frontend
 FROM node:20-alpine AS runner
 
 RUN corepack enable && corepack prepare pnpm@10.22.0 --activate
@@ -37,6 +41,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/web/dist ./web/dist
 
 EXPOSE 3001
 CMD ["node", "dist/server.js"]

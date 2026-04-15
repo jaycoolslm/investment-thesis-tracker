@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Outlet, Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { ErrorBoundary } from "react-error-boundary";
+import { ErrorFallback } from "./ErrorFallback.tsx";
 import {
   AddHoldingModal,
   type AddHoldingFormData,
@@ -244,13 +246,15 @@ export function Layout() {
       )}
 
       <main className="max-w-7xl mx-auto px-6 pt-6 pb-10">
-        <Outlet
-          context={{
-            onAddHolding: () => setModalOpen(true),
-            onBulkUpload: () => setBulkStep("upload"),
-            addToast,
-          }}
-        />
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <Outlet
+            context={{
+              onAddHolding: () => setModalOpen(true),
+              onBulkUpload: () => setBulkStep("upload"),
+              addToast,
+            }}
+          />
+        </ErrorBoundary>
       </main>
 
       <AddHoldingModal

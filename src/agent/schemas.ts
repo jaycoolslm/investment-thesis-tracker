@@ -39,3 +39,24 @@ export type Pillar = z.infer<typeof pillarSchema>;
 export type Risk = z.infer<typeof riskSchema>;
 export type Source = z.infer<typeof sourceSchema>;
 export type Valuation = z.infer<typeof valuationSchema>;
+
+// Phase 2: Weekly monitoring output schema
+export const weeklyLogOutputSchema = z.object({
+  weekLabel: z.string().min(1),
+  weekDate: z.string().date(),
+  priceChangePct: z.number().nullable(),
+  indexChangePct: z.number().nullable(),
+  relativePerf: z.number().nullable(),
+  thesisImpact: z.enum(["strengthened", "weakened", "unchanged"]),
+  summary: z.string().min(10),
+  pillarRefs: z.array(
+    z.object({
+      pillarId: z.string().uuid(),
+      pillarTitle: z.string(),
+      impact: z.enum(["strengthened", "weakened", "unchanged"]),
+    }),
+  ),
+  sources: z.array(sourceSchema),
+});
+
+export type WeeklyLogOutput = z.infer<typeof weeklyLogOutputSchema>;

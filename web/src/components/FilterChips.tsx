@@ -1,6 +1,16 @@
 import clsx from "clsx";
 
-const CHIP_OPTIONS = ["All", "Long", "Short", "Strengthened", "Weakened", "Unchanged"] as const;
+const CHIP_OPTIONS = [
+  "All",
+  "Long",
+  "Short",
+  "Strengthened",
+  "Weakened",
+  "Unchanged",
+  "Active",
+  "Closed",
+  "Paused",
+] as const;
 
 interface FilterChipsProps {
   activeFilters: string[];

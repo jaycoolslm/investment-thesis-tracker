@@ -225,3 +225,24 @@ export function reorderPillars(
     body: JSON.stringify({ pillarIds }),
   });
 }
+
+// Weekly logs
+
+export interface WeeklyLog {
+  id: string;
+  holdingId: string;
+  weekLabel: string | null;
+  weekDate: string | null;
+  priceChangePct: string | null;
+  indexChangePct: string | null;
+  relativePerf: string | null;
+  thesisImpact: "strengthened" | "weakened" | "unchanged" | null;
+  summary: string | null;
+  pillarRefs: unknown;
+  sources: unknown;
+  createdAt: string;
+}
+
+export function getWeeklyLogs(holdingId: string): Promise<WeeklyLog[]> {
+  return apiFetch(`/api/holdings/${holdingId}/weekly-logs`);
+}

@@ -14,6 +14,9 @@ import { RisksEditor } from "../components/thesis/RisksEditor.tsx";
 import { SourcesList } from "../components/thesis/SourcesList.tsx";
 import { BrokerResearchPanel } from "../components/thesis/BrokerResearchPanel.tsx";
 import { BenchmarkEditor } from "../components/thesis/BenchmarkEditor.tsx";
+import { StatusEditor } from "../components/thesis/StatusEditor.tsx";
+import { WeeklyLogTable } from "../components/thesis/WeeklyLogTable.tsx";
+import { useWeeklyLogs } from "../hooks/useWeeklyLogs.ts";
 import type { Valuation, Risk, Source } from "../api/client.ts";
 
 function formatDate(dateStr: string): string {
@@ -24,20 +27,30 @@ function formatDate(dateStr: string): string {
   });
 }
 
-const tabs = [
-  { value: "summary", label: "Summary & Pillars" },
-  { value: "quality", label: "Quality & Valuation" },
-  { value: "risks", label: "Assumptions & Risks" },
-  { value: "sources", label: "Sources" },
-  { value: "log", label: "Weekly Log" },
-];
+function buildTabs(logCount: number) {
+  return [
+    { value: "summary", label: "Summary & Pillars" },
+    { value: "quality", label: "Quality & Valuation" },
+    { value: "risks", label: "Assumptions & Risks" },
+    { value: "sources", label: "Sources" },
+    {
+      value: "log",
+      label: logCount > 0 ? `Weekly Log (${logCount})` : "Weekly Log",
+    },
+  ];
+}
 
 export function ThesisDetailPage() {
   const { holdingId } = useParams();
   const { data: thesis, isLoading: thesisLoading, isError: thesisError } = useThesis(holdingId!);
   const { data: holding, isLoading: holdingLoading } = useHolding(holdingId!);
+  const { data: weeklyLogs } = useWeeklyLogs(holdingId!);
   const [benchmark, setBenchmark] = useState<string | null>(null);
+  const [holdingStatus, setHoldingStatus] = useState<
+    "active" | "closed" | "paused" | null
+  >(null);
 
+  const logCount = weeklyLogs?.length ?? 0;
   const isLoading = thesisLoading || holdingLoading;
 
   if (isLoading) {
@@ -104,13 +117,20 @@ export function ThesisDetailPage() {
             currentBenchmark={currentBenchmark}
             onUpdate={setBenchmark}
           />
+          <span className="text-brand-300">|</span>
+          <span>Status:</span>
+          <StatusEditor
+            holdingId={holdingId!}
+            currentStatus={holdingStatus ?? holding?.status ?? "active"}
+            onUpdate={setHoldingStatus}
+          />
         </div>
       </div>
 
       {/* Tabs */}
       <Tabs.Root defaultValue="summary">
         <Tabs.List className="flex border-b border-brand-200 mb-6" aria-label="Thesis sections">
-          {tabs.map((tab) => (
+          {buildTabs(logCount).map((tab) => (
             <Tabs.Trigger
               key={tab.value}
               value={tab.value}
@@ -157,14 +177,7 @@ export function ThesisDetailPage() {
         </Tabs.Content>
 
         <Tabs.Content value="log">
-          <div className="bg-surface-card rounded-lg p-8 shadow-sm border border-brand-200 text-center">
-            <p className="text-sm text-brand-400">
-              Weekly monitoring is not yet active for this holding.
-            </p>
-            <p className="text-xs text-brand-300 mt-1">
-              Weekly logs will appear here once automated monitoring begins.
-            </p>
-          </div>
+          <WeeklyLogTable logs={weeklyLogs ?? []} />
         </Tabs.Content>
       </Tabs.Root>
     </div>

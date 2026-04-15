@@ -28,14 +28,18 @@ export function Dashboard() {
       let next = prev.filter((f) => f !== "All");
 
       const directionChips = ["Long", "Short"];
+      const statusChips = ["Active", "Closed", "Paused"];
       const isDirection = directionChips.includes(filter);
+      const isStatus = statusChips.includes(filter);
 
       if (next.includes(filter)) {
         next = next.filter((f) => f !== filter);
       } else {
         if (isDirection) {
-          // Direction chips are mutually exclusive
           next = next.filter((f) => !directionChips.includes(f));
+        }
+        if (isStatus) {
+          next = next.filter((f) => !statusChips.includes(f));
         }
         next.push(filter);
       }

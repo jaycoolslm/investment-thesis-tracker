@@ -1,6 +1,10 @@
 import { Codex } from "@openai/codex-sdk";
 import * as z from "zod";
-import { thesisOutputSchema, type ThesisOutput } from "./schemas.js";
+import {
+  thesisOutputSchema,
+  type ThesisOutput,
+  type WeeklyLogOutput,
+} from "./schemas.js";
 import { buildGenerationPrompt, type GenerationInput } from "./prompts.js";
 import { config } from "../config.js";
 
@@ -62,5 +66,17 @@ export class ThesisAgent {
 
     const parsed = JSON.parse(turn.finalResponse);
     return thesisOutputSchema.parse(parsed);
+  }
+
+  /**
+   * Analyse a holding's weekly news, price action, and broker research
+   * against its thesis pillars and assumptions. Phase 2 implementation.
+   */
+  async analyseWeekly(
+    _holdingId: string,
+    _thesisId: string,
+    _signal?: AbortSignal,
+  ): Promise<WeeklyLogOutput> {
+    throw new Error("Not implemented — Phase 2");
   }
 }

@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as z from "zod";
 import { eq, desc, max } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { theses, thesisPillars } from "../db/schema.js";
+import { theses, thesisPillars, weeklyLogs } from "../db/schema.js";
 import { valuationSchema, riskSchema } from "../agent/schemas.js";
 
 export const thesesRouter = Router();
@@ -33,6 +33,24 @@ const updatePillarSchema = z
 
 const reorderPillarsSchema = z.object({
   pillarIds: z.array(z.string().uuid()).min(1),
+});
+
+// ── GET /api/holdings/:id/weekly-logs ────────────────────────────────
+
+thesesRouter.get("/holdings/:id/weekly-logs", async (req, res) => {
+  const idResult = z.string().uuid().safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid holding ID" });
+    return;
+  }
+
+  const logs = await db
+    .select()
+    .from(weeklyLogs)
+    .where(eq(weeklyLogs.holdingId, idResult.data))
+    .orderBy(desc(weeklyLogs.createdAt));
+
+  res.json(logs);
 });
 
 // ── GET /api/holdings/:id/thesis ─────────────────────────────────────
