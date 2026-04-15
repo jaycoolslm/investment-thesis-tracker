@@ -1,5 +1,5 @@
 import { Queue } from "bullmq";
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 import { config } from "../config.js";
 
 // Shared connection — maxRetriesPerRequest: null is required for BullMQ workers
