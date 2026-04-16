@@ -16,10 +16,13 @@ import { useGenerateThesis } from "../hooks/useGenerateThesis.ts";
 import { useToast } from "../hooks/useToast.ts";
 import { useBulkProgress } from "../hooks/useBulkProgress.ts";
 import { useBulkRetry } from "../hooks/useBulkRetry.ts";
+import { useMonitoringProgress } from "../hooks/useMonitoringProgress.ts";
+import { useMonitoringStatus } from "../hooks/useMonitoringStatus.ts";
 import {
   startBulkGeneration,
   cancelBulkGeneration,
 } from "../api/bulk.ts";
+import { triggerMonitoringBatch } from "../api/client.ts";
 
 interface GenerationState {
   holdingId: string;
@@ -45,6 +48,38 @@ export function Layout() {
     bulkStep === "generating" ? bulkBatchId : null,
   );
   const retryMutation = useBulkRetry();
+
+  // Monitoring state
+  const [monitoringActive, setMonitoringActive] = useState(false);
+  const monitoringProgress = useMonitoringProgress(monitoringActive);
+  const monitoringStatus = useMonitoringStatus();
+
+  // If a monitoring batch is already running on page load, pick it up
+  useEffect(() => {
+    if (monitoringStatus.data?.status === "active") {
+      setMonitoringActive(true);
+    }
+  }, [monitoringStatus.data]);
+
+  // When monitoring batch completes
+  useEffect(() => {
+    if (monitoringActive && monitoringProgress.isComplete) {
+      setMonitoringActive(false);
+      queryClient.invalidateQueries({ queryKey: ["holdings"] });
+
+      if (monitoringProgress.failures.length > 0) {
+        addToast(
+          `${monitoringProgress.completed} of ${monitoringProgress.total} holdings monitored. ${monitoringProgress.failed} failed.`,
+          "error",
+        );
+      } else {
+        addToast(
+          `All ${monitoringProgress.completed} holdings monitored successfully.`,
+          "success",
+        );
+      }
+    }
+  }, [monitoringActive, monitoringProgress.isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When bulk generation completes, transition to complete step
   useEffect(() => {
@@ -177,6 +212,23 @@ export function Layout() {
         </Link>
         <div className="flex items-center gap-3">
           <button
+            onClick={async () => {
+              try {
+                await triggerMonitoringBatch();
+                setMonitoringActive(true);
+              } catch (err) {
+                addToast(
+                  err instanceof Error ? err.message : "Failed to trigger monitoring.",
+                  "error",
+                );
+              }
+            }}
+            disabled={monitoringActive}
+            className="border border-brand-200 bg-surface-card hover:bg-brand-100 text-brand-700 text-sm font-medium px-4 py-2 rounded-md focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {monitoringActive ? "Monitoring..." : "Run Weekly Monitoring"}
+          </button>
+          <button
             onClick={() => setBulkStep("upload")}
             className="border border-brand-200 bg-surface-card hover:bg-brand-100 text-brand-700 text-sm font-medium px-4 py-2 rounded-md focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 transition-colors"
           >
@@ -190,6 +242,16 @@ export function Layout() {
           </button>
         </div>
       </header>
+
+      {monitoringActive && !monitoringProgress.isComplete && (
+        <BulkProgressBanner
+          completed={monitoringProgress.completed}
+          failed={monitoringProgress.failed}
+          total={monitoringProgress.total}
+          estimatedTimeRemaining={monitoringProgress.estimatedTimeRemaining}
+          label="Monitoring holdings"
+        />
+      )}
 
       {bulkStep === "generating" && (
         <BulkProgressBanner

@@ -3,7 +3,8 @@ interface BulkProgressBannerProps {
   failed: number;
   total: number;
   estimatedTimeRemaining: string | null;
-  onCancel: () => void;
+  onCancel?: () => void;
+  label?: string;
 }
 
 export function BulkProgressBanner({
@@ -12,6 +13,7 @@ export function BulkProgressBanner({
   total,
   estimatedTimeRemaining,
   onCancel,
+  label = "Generating theses",
 }: BulkProgressBannerProps) {
   const processed = completed + failed;
   const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
@@ -20,7 +22,7 @@ export function BulkProgressBanner({
     <div className="bg-accent-50 border-b border-accent-100 px-6 py-3">
       <div className="max-w-7xl mx-auto flex items-center gap-4">
         <p className="text-sm font-medium text-accent-700 shrink-0">
-          Generating theses: {completed} of {total} complete
+          {label}: {completed} of {total} complete
           {failed > 0 && (
             <span className="text-error-text ml-1">({failed} failed)</span>
           )}
@@ -31,7 +33,7 @@ export function BulkProgressBanner({
           role="progressbar"
           aria-valuenow={processed}
           aria-valuemax={total}
-          aria-label={`Bulk generation progress: ${percent}%`}
+          aria-label={`${label} progress: ${percent}%`}
         >
           <div
             className="h-full bg-accent-600 rounded-full transition-all duration-300"
@@ -45,13 +47,15 @@ export function BulkProgressBanner({
           </span>
         )}
 
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-sm text-brand-500 hover:text-brand-700 underline shrink-0"
-        >
-          Cancel Remaining
-        </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-sm text-brand-500 hover:text-brand-700 underline shrink-0"
+          >
+            Cancel Remaining
+          </button>
+        )}
       </div>
     </div>
   );

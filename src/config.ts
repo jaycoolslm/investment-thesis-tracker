@@ -9,6 +9,8 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional().transform((v) => v || undefined),
   AZURE_OPENAI_ENDPOINT: z.string().url().optional().or(z.literal("")),
   AZURE_OPENAI_API_KEY: z.string().optional().transform((v) => v || undefined),
+  MONITORING_CRON_SCHEDULE: z.string().default("0 6 * * 1"),
+  MONITORING_CONCURRENCY: z.coerce.number().int().positive().default(10),
 });
 
 const parsed = envSchema.safeParse(process.env);

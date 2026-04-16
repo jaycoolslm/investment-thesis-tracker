@@ -24,6 +24,43 @@ export type MonitoringProgressEvent =
   | { type: "failed"; error: string }
   | { type: "skipped"; reason: string };
 
+/**
+ * Compute ISO 8601 week label, the Monday date, and the Friday date
+ * for the given date (defaults to now).
+ */
+export function getCurrentWeek(now: Date = new Date()): {
+  weekLabel: string;
+  weekDate: string;
+  fridayDate: Date;
+} {
+  // Find Monday of current week (ISO: Monday = 1)
+  const dayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon, ...
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysFromMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  // Friday = Monday + 4
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+
+  // ISO week number
+  const jan4 = new Date(monday.getFullYear(), 0, 4);
+  const jan4DayOfWeek = jan4.getDay() === 0 ? 7 : jan4.getDay();
+  const isoWeekStart = new Date(jan4);
+  isoWeekStart.setDate(jan4.getDate() - jan4DayOfWeek + 1);
+
+  const weekNumber =
+    Math.ceil(
+      ((monday.getTime() - isoWeekStart.getTime()) / 86_400_000 + 1) / 7,
+    );
+
+  const weekLabel = `${monday.getFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
+  const weekDate = monday.toISOString().split("T")[0];
+
+  return { weekLabel, weekDate, fridayDate: friday };
+}
+
 export class WeeklyMonitoringService extends EventEmitter {
   private agent: ThesisAgent;
   private marketData: MarketDataService;
@@ -36,7 +73,7 @@ export class WeeklyMonitoringService extends EventEmitter {
 
   async monitorHolding(holdingId: string): Promise<string> {
     // 1. Compute week label (ISO 8601)
-    const { weekLabel, weekDate, fridayDate } = this.getCurrentWeek();
+    const { weekLabel, weekDate, fridayDate } = getCurrentWeek();
 
     // 2. Idempotency check
     const [existing] = await db
@@ -228,44 +265,6 @@ export class WeeklyMonitoringService extends EventEmitter {
     this.emit("progress", event);
   }
 
-  /**
-   * Compute ISO 8601 week label, the Monday date, and the Friday date
-   * for the current week.
-   */
-  private getCurrentWeek(): {
-    weekLabel: string;
-    weekDate: string;
-    fridayDate: Date;
-  } {
-    const now = new Date();
-
-    // Find Monday of current week (ISO: Monday = 1)
-    const dayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon, ...
-    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - daysFromMonday);
-    monday.setHours(0, 0, 0, 0);
-
-    // Friday = Monday + 4
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-
-    // ISO week number
-    const jan4 = new Date(monday.getFullYear(), 0, 4);
-    const jan4DayOfWeek = jan4.getDay() === 0 ? 7 : jan4.getDay();
-    const isoWeekStart = new Date(jan4);
-    isoWeekStart.setDate(jan4.getDate() - jan4DayOfWeek + 1);
-
-    const weekNumber =
-      Math.ceil(
-        ((monday.getTime() - isoWeekStart.getTime()) / 86_400_000 + 1) / 7,
-      );
-
-    const weekLabel = `${monday.getFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
-    const weekDate = monday.toISOString().split("T")[0];
-
-    return { weekLabel, weekDate, fridayDate: friday };
-  }
 }
 
 export class HoldingNotFoundError extends Error {

@@ -252,3 +252,22 @@ export function triggerWeeklyMonitoring(holdingId: string): Promise<WeeklyLog> {
     method: "POST",
   });
 }
+
+// Batch monitoring
+
+export interface MonitoringBatchStatus {
+  weekLabel: string;
+  total: number;
+  completed: number;
+  failed: number;
+  status: "active" | "complete";
+  startedAt: string;
+}
+
+export function triggerMonitoringBatch(): Promise<MonitoringBatchStatus> {
+  return apiFetch("/api/monitoring/trigger", { method: "POST" });
+}
+
+export function getMonitoringStatus(): Promise<MonitoringBatchStatus> {
+  return apiFetch("/api/monitoring/status");
+}

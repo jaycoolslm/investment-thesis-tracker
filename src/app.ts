@@ -8,6 +8,7 @@ import { generationRouter } from "./routes/generation.js";
 import { thesesRouter } from "./routes/theses.js";
 import { documentsRouter } from "./routes/documents.js";
 import { bulkRouter } from "./routes/bulk.js";
+import { monitoringRouter } from "./routes/monitoring.js";
 import { config } from "./config.js";
 
 export function createApp() {
@@ -21,6 +22,7 @@ export function createApp() {
   app.use("/api", thesesRouter);
   app.use("/api", documentsRouter);
   app.use("/api", bulkRouter);
+  app.use("/api", monitoringRouter);
 
   app.get("/api/health", async (_req, res) => {
     try {

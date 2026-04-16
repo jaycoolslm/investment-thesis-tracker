@@ -74,7 +74,7 @@ function getColumns(onDelete?: (id: string) => void) {
       ),
     }),
     columnHelper.accessor("latestImpact", {
-      header: "Status",
+      header: "Impact",
       cell: (info) => <StatusBadge status={info.getValue()} />,
     }),
     columnHelper.display({
