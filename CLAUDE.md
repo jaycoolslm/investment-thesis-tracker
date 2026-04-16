@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Phase 2 Sprint 6 complete. Phase 1 shipped (Sprints 1-5). Sprint 6 (Phase 2 start) added: weekly monitoring vertical slice — `MarketDataService` wrapping `yahoo-finance2` v3 (9 global benchmark indices), `buildWeeklyPrompt()` with pillar-by-pillar analysis and pre-fetched verified price data, `ThesisAgent.analyseWeekly()` implementation (replaced stub), `WeeklyMonitoringService` orchestrator (idempotency via unique DB index, price field overwrite post-parse), `POST /api/holdings/:id/weekly-logs/trigger` + SSE progress endpoint, "Run Weekly Check" button on Weekly Log tab with loading state. Manually tested end-to-end. Integration tests written, deferred to Sprint 9 for validation. Note: `modelReasoningEffort` set to `"low"` for both generation and weekly analysis during dev (TODO: bump to high for production).
+Phase 2 Sprint 7 complete. Phase 1 shipped (Sprints 1-5). Sprint 6 added weekly monitoring vertical slice (single-holding manual trigger). Sprint 7 added scheduled batch monitoring: `node-cron` v4 scheduler (configurable, default Monday 6 AM, `noOverlap: true`), separate `weekly-monitoring` BullMQ queue (concurrency 10, 3x retry with exponential backoff), `weekly-worker.ts` calling `WeeklyMonitoringService.monitorHolding()` per job, `HSETNX`-based idempotency to prevent duplicate batches, `runMonitoringBatch()` shared by cron + manual trigger. Three new API endpoints: `POST /api/monitoring/trigger` (202), `GET /api/monitoring/status`, `GET /api/monitoring/progress` (SSE). Frontend: "Run Weekly Monitoring" button in header, real-time monitoring progress banner (reuses `BulkProgressBanner` with configurable `label`/`onCancel`), `useMonitoringProgress` SSE hook, `useMonitoringStatus` for active-batch detection on page load, completion toasts. `getCurrentWeek()` extracted from `WeeklyMonitoringService` to standalone export (accepts optional `now` param for testability). Integration tests deferred to Sprint 9. Note: `modelReasoningEffort` set to `"low"` for both generation and weekly analysis during dev (TODO: bump to high for production).
 
 ## Key Documents
 
@@ -24,7 +24,8 @@ Read these before making architectural or UX decisions:
 - **Frontend**: React 19 + Vite 8 + TanStack Table + TanStack Query + Tailwind CSS v4 + Radix UI + Tiptap
 - **Database**: PostgreSQL 16 + Drizzle ORM 0.45 (pg driver)
 - **Validation**: Zod v4 (env config, API input, AI output)
-- **Jobs**: BullMQ + Redis (concurrency 3, 2 retry attempts with exponential backoff)
+- **Jobs**: BullMQ + Redis (bulk-generation: concurrency 3, 2 retries; weekly-monitoring: concurrency 10, 3 retries)
+- **Scheduling**: node-cron v4 (weekly monitoring cron, configurable via `MONITORING_CRON_SCHEDULE`)
 - **AI**: Codex CLI SDK (`@openai/codex-sdk` + `@openai/codex`) → Azure OpenAI (GPT 5.4-mini, web search live, `runStreamed` for progress events)
 - **Market data**: `yahoo-finance2` v3 (weekly price returns for tickers + benchmark indices, no API key needed)
 - **File parsing**: ExcelJS (read/write .xlsx + .csv for bulk upload + template generation)
@@ -67,7 +68,7 @@ thesis-tracking/
   src/
     server.ts                  — Express server entry point
     app.ts                     — Express app factory (testable without listen)
-    config.ts                  — Zod-validated env parsing (incl. OpenAI/Azure keys)
+    config.ts                  — Zod-validated env parsing (incl. OpenAI/Azure keys, monitoring schedule/concurrency)
     progress.ts                — EventEmitter singleton for SSE progress events
     routes/
       holdings.ts              — Holdings CRUD (GET/POST/PUT/DELETE)
@@ -75,26 +76,28 @@ thesis-tracking/
       theses.ts                — GET thesis + PATCH thesis + pillar CRUD + reorder
       documents.ts             — POST/GET/DELETE /api/holdings/:id/documents
       bulk.ts                  — Bulk upload: parse/preview, start, SSE progress, cancel, retry, template
+      monitoring.ts            — Batch monitoring: POST trigger, GET status, GET progress (SSE)
     agent/
       codex-agent.ts           — ThesisAgent: generateThesis() + analyseWeekly() wrapping @openai/codex-sdk
       prompts.ts               — buildGenerationPrompt() + buildWeeklyPrompt() + input interfaces
       schemas.ts               — Zod schemas for AI output (thesis, weekly log, pillars, risks, etc.)
     services/
       thesis-generation.ts     — Orchestrates: validate → agent call → persist in transaction
-      weekly-monitoring.ts     — Weekly monitoring: market data → agent analysis → persist log + update holding
+      weekly-monitoring.ts     — Weekly monitoring: market data → agent analysis → persist log + update holding + getCurrentWeek() export
       market-data.ts           — yahoo-finance2 wrapper: weekly returns for tickers + benchmark indices
       bulk-generation.ts       — Bulk orchestration: parse → cache rows in Redis → create holdings → enqueue
       file-parser.ts           — ExcelJS .xlsx/.csv parsing + Zod per-row validation
       template-generator.ts    — Generate downloadable .xlsx template with ExcelJS
     jobs/
-      queue.ts                 — BullMQ queue + Redis connection + enqueueBatch/cancelBatch helpers
+      queue.ts                 — BullMQ queues (bulk-generation + weekly-monitoring) + Redis connection + batch helpers
       bulk-worker.ts           — Worker (concurrency 3): generates theses, tracks batch state in Redis
+      weekly-worker.ts         — Worker (concurrency 10): weekly monitoring per holding, batch progress in Redis
+      scheduler.ts             — node-cron scheduler + runMonitoringBatch() (shared by cron + manual trigger)
     db/
       schema.ts                — 5 tables + 3 enums + relations
       index.ts                 — Drizzle client
       seed.ts                  — Idempotent seed (3 holdings)
       migrations/              — Drizzle-generated SQL
-    jobs/                      — BullMQ queues, workers, scheduler (Sprint 4)
   web/
     package.json               — Frontend deps
     vite.config.ts             — React + Tailwind plugins, /api proxy
@@ -109,14 +112,14 @@ thesis-tracking/
         Dashboard.tsx           — Holdings list with search, filter chips, loading/empty/error states
         ThesisDetailPage.tsx    — Thesis view: header, 5-tab Radix Tabs, all editors
       components/
-        Layout.tsx              — Shared header + Outlet + modals + toasts + bulk state management
+        Layout.tsx              — Shared header + Outlet + modals + toasts + bulk + monitoring state management
         HoldingsTable.tsx       — TanStack Table, 7 columns, sorting, globalFilterFn, row click, delete
         SearchBar.tsx           — Search input with Cmd+K shortcut, clear button, focus states
         FilterChips.tsx         — All/Long/Short/Strengthened/Weakened/Unchanged/Active/Closed/Paused toggle chips
         AddHoldingModal.tsx     — Radix Dialog: ticker, direction, benchmark, bullets, file upload
         BulkUploadModal.tsx     — Multi-step: file drop → validation preview table → generate
         BulkValidationTable.tsx — TanStack Table preview with inline editing for error rows
-        BulkProgressBanner.tsx  — Persistent progress bar with ETA and cancel (between header + main)
+        BulkProgressBanner.tsx  — Reusable progress banner with ETA, optional cancel + label (bulk + monitoring)
         BulkResultsModal.tsx    — Post-completion: failure table with per-row retry
         GenerationProgress.tsx  — Live activity feed (SSE-driven): web search queries + "Compiling thesis..." step
         ErrorFallback.tsx       — React error boundary fallback UI
@@ -155,9 +158,11 @@ thesis-tracking/
         useBulkUpload.ts        — TanStack Query mutation for bulk file upload
         useBulkProgress.ts      — SSE subscription for bulk generation progress + ETA
         useBulkRetry.ts         — Mutation for retrying failed bulk holdings
+        useMonitoringProgress.ts — SSE subscription for batch monitoring progress + ETA
+        useMonitoringStatus.ts  — TanStack Query: detect active monitoring batch on page load
         useToast.ts             — Toast state management
       api/
-        client.ts               — Typed fetch: holdings, theses, pillars, documents, generation
+        client.ts               — Typed fetch: holdings, theses, pillars, documents, generation, monitoring
         bulk.ts                 — Bulk API: upload, start, cancel, retry, template download
 ```
 
@@ -190,7 +195,7 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 | S4 | 1 | May 5-9 | Dashboard polish (search/filter/badges) + bulk upload | Done |
 | S5 | 1 | May 12-16 | Integration testing + ship prep + runStreamed migration | Done |
 | S6 | 2 | May 19-23 | Weekly monitoring vertical slice — market data + AI analysis + manual trigger | Done |
-| S7 | 2 | May 26-30 | Scheduled batch monitoring — node-cron + BullMQ + dashboard | |
+| S7 | 2 | May 26-30 | Scheduled batch monitoring — node-cron + BullMQ + dashboard | Done |
 | S8 | 2 | Jun 2-6 | Email digest + polish | |
 | S9 | 2 | Jun 9-13 | Test hardening + Phase 3 prep | |
 
