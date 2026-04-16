@@ -177,7 +177,11 @@ export function ThesisDetailPage() {
         </Tabs.Content>
 
         <Tabs.Content value="log">
-          <WeeklyLogTable logs={weeklyLogs ?? []} />
+          <WeeklyLogTable
+            logs={weeklyLogs ?? []}
+            holdingId={holdingId!}
+            hasThesis={!!thesis}
+          />
         </Tabs.Content>
       </Tabs.Root>
     </div>

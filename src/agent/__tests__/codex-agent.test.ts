@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { VALID_THESIS_FIXTURE, VALID_GENERATION_INPUT, GENERATION_INPUT_WITH_FILES } from "./fixtures.js";
+import {
+  VALID_THESIS_FIXTURE,
+  VALID_GENERATION_INPUT,
+  GENERATION_INPUT_WITH_FILES,
+  VALID_WEEKLY_LOG_FIXTURE,
+  VALID_WEEKLY_ANALYSIS_INPUT,
+} from "./fixtures.js";
 
 // Helper: create a mock runStreamed that yields events and ends with the agent message
 function mockRunStreamedResult(finalResponse: string) {
@@ -195,5 +201,139 @@ describe("ThesisAgent", () => {
     await expect(
       agent.generateThesis(VALID_GENERATION_INPUT),
     ).rejects.toThrow("API rate limit exceeded");
+  });
+});
+
+describe("ThesisAgent.analyseWeekly", () => {
+  let agent: InstanceType<typeof ThesisAgent>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    agent = new ThesisAgent();
+  });
+
+  it("calls startThread with correct options", async () => {
+    mockRunStreamed.mockImplementationOnce(() =>
+      mockRunStreamedResult(JSON.stringify(VALID_WEEKLY_LOG_FIXTURE)),
+    );
+
+    await agent.analyseWeekly(VALID_WEEKLY_ANALYSIS_INPUT);
+
+    expect(mockStartThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvalPolicy: "never",
+        sandboxMode: "read-only",
+        webSearchMode: "live",
+        skipGitRepoCheck: true,
+      }),
+    );
+  });
+
+  it("passes additional directories when research files provided", async () => {
+    mockRunStreamed.mockImplementationOnce(() =>
+      mockRunStreamedResult(JSON.stringify(VALID_WEEKLY_LOG_FIXTURE)),
+    );
+
+    await agent.analyseWeekly({
+      ...VALID_WEEKLY_ANALYSIS_INPUT,
+      researchFilePaths: ["/data/documents/abc-123/report.pdf"],
+    });
+
+    expect(mockStartThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        additionalDirectories: ["/data/documents"],
+      }),
+    );
+  });
+
+  it("does not pass additional directories when no files", async () => {
+    mockRunStreamed.mockImplementationOnce(() =>
+      mockRunStreamedResult(JSON.stringify(VALID_WEEKLY_LOG_FIXTURE)),
+    );
+
+    await agent.analyseWeekly(VALID_WEEKLY_ANALYSIS_INPUT);
+
+    expect(mockStartThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        additionalDirectories: [],
+      }),
+    );
+  });
+
+  it("calls runStreamed with prompt containing pillar titles", async () => {
+    mockRunStreamed.mockImplementationOnce(() =>
+      mockRunStreamedResult(JSON.stringify(VALID_WEEKLY_LOG_FIXTURE)),
+    );
+
+    await agent.analyseWeekly(VALID_WEEKLY_ANALYSIS_INPUT);
+
+    expect(mockRunStreamed).toHaveBeenCalledWith(
+      expect.stringContaining("Services Revenue Flywheel"),
+      expect.objectContaining({
+        outputSchema: expect.any(Object),
+      }),
+    );
+  });
+
+  it("parses response through weeklyLogOutputSchema", async () => {
+    mockRunStreamed.mockImplementationOnce(() =>
+      mockRunStreamedResult(JSON.stringify(VALID_WEEKLY_LOG_FIXTURE)),
+    );
+
+    const result = await agent.analyseWeekly(VALID_WEEKLY_ANALYSIS_INPUT);
+
+    expect(result.thesisImpact).toBe("strengthened");
+    expect(result.weekLabel).toBe("2026-W21");
+    expect(result.pillarRefs).toHaveLength(2);
+  });
+
+  it("forwards events to onEvent callback", async () => {
+    mockRunStreamed.mockImplementationOnce(() =>
+      mockRunStreamedResult(JSON.stringify(VALID_WEEKLY_LOG_FIXTURE)),
+    );
+
+    const onEvent = vi.fn();
+    await agent.analyseWeekly(VALID_WEEKLY_ANALYSIS_INPUT, undefined, onEvent);
+
+    expect(onEvent).toHaveBeenCalledTimes(3);
+  });
+
+  it("throws on turn.failed event", async () => {
+    mockRunStreamed.mockImplementationOnce(() =>
+      mockRunStreamedError("Rate limit exceeded"),
+    );
+
+    await expect(
+      agent.analyseWeekly(VALID_WEEKLY_ANALYSIS_INPUT),
+    ).rejects.toThrow("Rate limit exceeded");
+  });
+
+  it("throws on invalid JSON from agent", async () => {
+    mockRunStreamed.mockImplementationOnce(() =>
+      mockRunStreamedResult("not json"),
+    );
+
+    await expect(
+      agent.analyseWeekly(VALID_WEEKLY_ANALYSIS_INPUT),
+    ).rejects.toThrow();
+  });
+
+  it("throws when response fails schema validation", async () => {
+    mockRunStreamed.mockImplementationOnce(() =>
+      mockRunStreamedResult(
+        JSON.stringify({
+          weekLabel: "",
+          weekDate: "invalid",
+          thesisImpact: "bad",
+          summary: "",
+          pillarRefs: [],
+          sources: [],
+        }),
+      ),
+    );
+
+    await expect(
+      agent.analyseWeekly(VALID_WEEKLY_ANALYSIS_INPUT),
+    ).rejects.toThrow();
   });
 });

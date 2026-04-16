@@ -11,6 +11,7 @@ import {
   date,
   bigint,
   jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // Enums
@@ -88,22 +89,31 @@ export const thesisPillarsRelations = relations(thesisPillars, ({ one }) => ({
 }));
 
 // Weekly Logs
-export const weeklyLogs = pgTable("weekly_logs", {
-  id: uuid().defaultRandom().primaryKey(),
-  holdingId: uuid("holding_id")
-    .notNull()
-    .references(() => holdings.id, { onDelete: "cascade" }),
-  weekLabel: varchar("week_label", { length: 20 }),
-  weekDate: date("week_date"),
-  priceChangePct: numeric("price_change_pct", { precision: 8, scale: 4 }),
-  indexChangePct: numeric("index_change_pct", { precision: 8, scale: 4 }),
-  relativePerf: numeric("relative_perf", { precision: 8, scale: 4 }),
-  thesisImpact: thesisImpactEnum("thesis_impact"),
-  summary: text(),
-  pillarRefs: jsonb("pillar_refs"),
-  sources: jsonb(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+export const weeklyLogs = pgTable(
+  "weekly_logs",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    holdingId: uuid("holding_id")
+      .notNull()
+      .references(() => holdings.id, { onDelete: "cascade" }),
+    weekLabel: varchar("week_label", { length: 20 }),
+    weekDate: date("week_date"),
+    priceChangePct: numeric("price_change_pct", { precision: 8, scale: 4 }),
+    indexChangePct: numeric("index_change_pct", { precision: 8, scale: 4 }),
+    relativePerf: numeric("relative_perf", { precision: 8, scale: 4 }),
+    thesisImpact: thesisImpactEnum("thesis_impact"),
+    summary: text(),
+    pillarRefs: jsonb("pillar_refs"),
+    sources: jsonb(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("weekly_logs_holding_week_uniq").on(
+      table.holdingId,
+      table.weekLabel,
+    ),
+  ],
+);
 
 export const weeklyLogsRelations = relations(weeklyLogs, ({ one }) => ({
   holding: one(holdings, {

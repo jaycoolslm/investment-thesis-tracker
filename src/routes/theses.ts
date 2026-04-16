@@ -4,6 +4,13 @@ import { eq, desc, max } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { theses, thesisPillars, weeklyLogs } from "../db/schema.js";
 import { valuationSchema, riskSchema } from "../agent/schemas.js";
+import {
+  WeeklyMonitoringService,
+  HoldingNotFoundError,
+  NoThesisError,
+  type MonitoringProgressEvent,
+} from "../services/weekly-monitoring.js";
+import { progressEmitter } from "../progress.js";
 
 export const thesesRouter = Router();
 
@@ -51,6 +58,99 @@ thesesRouter.get("/holdings/:id/weekly-logs", async (req, res) => {
     .orderBy(desc(weeklyLogs.createdAt));
 
   res.json(logs);
+});
+
+// ── GET /api/holdings/:id/weekly-logs/progress (SSE) ─────────────────
+
+thesesRouter.get("/holdings/:id/weekly-logs/progress", (req, res) => {
+  const idResult = z.string().uuid().safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid holding ID" });
+    return;
+  }
+
+  const holdingId = idResult.data;
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  res.flushHeaders();
+
+  function onProgress(event: MonitoringProgressEvent) {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+    if (
+      event.type === "complete" ||
+      event.type === "failed" ||
+      event.type === "skipped"
+    ) {
+      setTimeout(() => res.end(), 100);
+    }
+  }
+
+  progressEmitter.on(`monitoring:${holdingId}`, onProgress);
+
+  req.on("close", () => {
+    progressEmitter.off(`monitoring:${holdingId}`, onProgress);
+  });
+});
+
+// ── POST /api/holdings/:id/weekly-logs/trigger ───────────────────────
+
+thesesRouter.post("/holdings/:id/weekly-logs/trigger", async (req, res) => {
+  const idResult = z.string().uuid().safeParse(req.params.id);
+  if (!idResult.success) {
+    res.status(400).json({ error: "Invalid holding ID" });
+    return;
+  }
+
+  const holdingId = idResult.data;
+  const service = new WeeklyMonitoringService();
+
+  service.on("progress", (event: MonitoringProgressEvent) => {
+    progressEmitter.emit(`monitoring:${holdingId}`, event);
+  });
+
+  try {
+    const logId = await service.monitorHolding(holdingId);
+
+    if (!logId) {
+      res.status(200).json({ skipped: true, message: "Holding is not active" });
+      return;
+    }
+
+    const [log] = await db
+      .select()
+      .from(weeklyLogs)
+      .where(eq(weeklyLogs.id, logId));
+
+    res.status(201).json(log);
+  } catch (err) {
+    console.error("[weekly-monitoring] Error for holding", holdingId, err);
+    if (err instanceof HoldingNotFoundError) {
+      res.status(404).json({ error: "Holding not found" });
+      return;
+    }
+    if (err instanceof NoThesisError) {
+      res.status(409).json({
+        error: "No thesis exists for this holding. Generate a thesis first.",
+      });
+      return;
+    }
+    if (err instanceof Error && err.name === "TimeoutError") {
+      res.status(504).json({
+        error: "Weekly monitoring timed out. Please try again.",
+      });
+      return;
+    }
+    res.status(500).json({
+      error: "Weekly monitoring failed",
+      message: err instanceof Error ? err.message : "Unknown error",
+    });
+  }
 });
 
 // ── GET /api/holdings/:id/thesis ─────────────────────────────────────

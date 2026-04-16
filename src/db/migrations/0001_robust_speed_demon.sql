@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "weekly_logs_holding_week_uniq" ON "weekly_logs" USING btree ("holding_id","week_label");

@@ -246,3 +246,9 @@ export interface WeeklyLog {
 export function getWeeklyLogs(holdingId: string): Promise<WeeklyLog[]> {
   return apiFetch(`/api/holdings/${holdingId}/weekly-logs`);
 }
+
+export function triggerWeeklyMonitoring(holdingId: string): Promise<WeeklyLog> {
+  return apiFetch(`/api/holdings/${holdingId}/weekly-logs/trigger`, {
+    method: "POST",
+  });
+}

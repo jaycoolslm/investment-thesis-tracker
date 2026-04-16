@@ -1,5 +1,5 @@
-import type { ThesisOutput } from "../schemas.js";
-import type { GenerationInput } from "../prompts.js";
+import type { ThesisOutput, WeeklyLogOutput } from "../schemas.js";
+import type { GenerationInput, WeeklyAnalysisInput } from "../prompts.js";
 
 export const VALID_THESIS_FIXTURE: ThesisOutput = {
   summary:
@@ -90,4 +90,64 @@ export const GENERATION_INPUT_WITH_FILES: GenerationInput = {
     "/data/documents/abc-123/shell-broker-report.pdf",
     "/data/documents/abc-123/shell-earnings-q4.docx",
   ],
+};
+
+// ── Weekly monitoring fixtures ────────────────────────────────────────
+
+export const VALID_WEEKLY_LOG_FIXTURE: WeeklyLogOutput = {
+  weekLabel: "2026-W21",
+  weekDate: "2026-05-19",
+  priceChangePct: 3.2,
+  indexChangePct: 1.1,
+  relativePerf: 2.1,
+  thesisImpact: "strengthened",
+  summary:
+    "Pillar 1 strengthened: Q2 services revenue beat consensus by 8%, confirming the flywheel thesis. Assumption 1 intact — services grew 16% YoY, ahead of the 15% target.",
+  pillarRefs: [
+    {
+      pillarId: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      pillarTitle: "Services Revenue Flywheel",
+      impact: "strengthened",
+    },
+    {
+      pillarId: "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+      pillarTitle: "Pricing Power and Brand Moat",
+      impact: "unchanged",
+    },
+  ],
+  sources: [
+    {
+      title: "Apple Q2 FY26 Earnings Release",
+      url: "https://investor.apple.com",
+      type: "filing",
+    },
+  ],
+};
+
+export const VALID_WEEKLY_ANALYSIS_INPUT: WeeklyAnalysisInput = {
+  ticker: "AAPL",
+  companyName: "Apple Inc.",
+  direction: "long",
+  benchmarkIndex: "S&P 500",
+  thesisSummary: VALID_THESIS_FIXTURE.summary,
+  pillars: [
+    {
+      id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      title: "Services Revenue Flywheel",
+      body: "Apple's services segment grew 14% YoY to $24.2B in Q1 FY25.",
+    },
+    {
+      id: "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+      title: "Pricing Power and Brand Moat",
+      body: "Apple raised ASPs by 8% with minimal volume impact.",
+    },
+  ],
+  assumptions: ["Services revenue grows >15% annually through FY27"],
+  risks: [
+    { description: "EU DMA forces sideloading", severity: "high" },
+  ],
+  researchFilePaths: [],
+  priceData: { priceChangePct: 3.2, indexChangePct: 1.1, relativePerf: 2.1 },
+  weekLabel: "2026-W21",
+  weekDate: "2026-05-19",
 };

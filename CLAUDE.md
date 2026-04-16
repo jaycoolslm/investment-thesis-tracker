@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Sprint 5 complete (May 12-16). Phase 1 shipped. Sprint 5 added: test infrastructure (Vitest unit + Testcontainers integration + Playwright E2E), Weekly Log tab with TanStack Table, holding status management (active/closed/paused) with dashboard filter chips, React error boundary, production Docker build (Express static serving + SPA fallback). Post-sprint: switched from `thread.run()` to `thread.runStreamed()` for real-time generation progress — modal now shows live web search queries and a "Compiling thesis..." step instead of fake checkpoints. Added `@openai/codex` as direct dependency for Docker binary resolution. Note: Codex CLI exec mode does not emit reasoning events (SDK types define `ReasoningItem` but the JSONL stream never includes them — tracked upstream at openai/codex#5339).
+Phase 2 Sprint 6 complete. Phase 1 shipped (Sprints 1-5). Sprint 6 (Phase 2 start) added: weekly monitoring vertical slice — `MarketDataService` wrapping `yahoo-finance2` v3 (9 global benchmark indices), `buildWeeklyPrompt()` with pillar-by-pillar analysis and pre-fetched verified price data, `ThesisAgent.analyseWeekly()` implementation (replaced stub), `WeeklyMonitoringService` orchestrator (idempotency via unique DB index, price field overwrite post-parse), `POST /api/holdings/:id/weekly-logs/trigger` + SSE progress endpoint, "Run Weekly Check" button on Weekly Log tab with loading state. Manually tested end-to-end. Integration tests written, deferred to Sprint 9 for validation. Note: `modelReasoningEffort` set to `"low"` for both generation and weekly analysis during dev (TODO: bump to high for production).
 
 ## Key Documents
 
@@ -12,7 +12,7 @@ Read these before making architectural or UX decisions:
 
 - `PRD.md` — Product requirements (v2.1). Pillar-based thesis template, all user stories, acceptance criteria.
 - `ARCHITECTURE.md` — Tech architecture (v2.0). Simplified: Codex SDK does web search + file reading natively.
-- `SPRINT-PLAN.md` — 5-week Phase 1 sprint plan with concrete tasks per week.
+- `SPRINT-PLAN.md` — Phase 1 (5 sprints) + Phase 2 (Sprints 6-9) sprint plans.
 - `DESIGN-HANDOFF.md` — Developer-ready component specs, design tokens, interaction states.
 - `TESTING-STRATEGY.md` — 6-layer test strategy. Zod schema validation is the critical layer.
 - `UX-DESIGN.md` — UX critique, screen-by-screen copy, accessibility notes.
@@ -26,6 +26,7 @@ Read these before making architectural or UX decisions:
 - **Validation**: Zod v4 (env config, API input, AI output)
 - **Jobs**: BullMQ + Redis (concurrency 3, 2 retry attempts with exponential backoff)
 - **AI**: Codex CLI SDK (`@openai/codex-sdk` + `@openai/codex`) → Azure OpenAI (GPT 5.4-mini, web search live, `runStreamed` for progress events)
+- **Market data**: `yahoo-finance2` v3 (weekly price returns for tickers + benchmark indices, no API key needed)
 - **File parsing**: ExcelJS (read/write .xlsx + .csv for bulk upload + template generation)
 - **Containers**: Docker Compose (api + postgres + redis)
 - **Package manager**: pnpm (separate package.json for root backend + web/ frontend)
@@ -75,11 +76,13 @@ thesis-tracking/
       documents.ts             — POST/GET/DELETE /api/holdings/:id/documents
       bulk.ts                  — Bulk upload: parse/preview, start, SSE progress, cancel, retry, template
     agent/
-      codex-agent.ts           — ThesisAgent wrapper around @openai/codex-sdk (web search live, high reasoning)
-      prompts.ts               — buildGenerationPrompt() + GenerationInput interface
-      schemas.ts               — Zod schemas for AI output (thesis, pillars, risks, etc.)
+      codex-agent.ts           — ThesisAgent: generateThesis() + analyseWeekly() wrapping @openai/codex-sdk
+      prompts.ts               — buildGenerationPrompt() + buildWeeklyPrompt() + input interfaces
+      schemas.ts               — Zod schemas for AI output (thesis, weekly log, pillars, risks, etc.)
     services/
       thesis-generation.ts     — Orchestrates: validate → agent call → persist in transaction
+      weekly-monitoring.ts     — Weekly monitoring: market data → agent analysis → persist log + update holding
+      market-data.ts           — yahoo-finance2 wrapper: weekly returns for tickers + benchmark indices
       bulk-generation.ts       — Bulk orchestration: parse → cache rows in Redis → create holdings → enqueue
       file-parser.ts           — ExcelJS .xlsx/.csv parsing + Zod per-row validation
       template-generator.ts    — Generate downloadable .xlsx template with ExcelJS
@@ -148,6 +151,7 @@ thesis-tracking/
         useGenerateThesis.ts    — Mutation: create holding → upload files
         useGenerationProgress.ts — SSE progress: live activity log from runStreamed events
         useWeeklyLogs.ts        — TanStack Query: weekly logs for a holding
+        useWeeklyMonitoring.ts  — Mutation: trigger weekly monitoring for a holding
         useBulkUpload.ts        — TanStack Query mutation for bulk file upload
         useBulkProgress.ts      — SSE subscription for bulk generation progress + ETA
         useBulkRetry.ts         — Mutation for retrying failed bulk holdings
@@ -176,15 +180,19 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 - **Status**: `status-green-*` (strengthened), `status-red-*` (weakened), `status-grey-*` (unchanged), `status-blue-*` (generating)
 - **Full token spec in** `DESIGN-HANDOFF.md`
 
-## Sprint Plan (Phase 1)
+## Sprint Plan
 
-| Sprint | Week | Focus | Status |
-|--------|------|-------|--------|
-| S1 | Apr 14-18 | Foundation — Docker, DB schema, Express + React scaffold, dashboard shell | Done |
-| S2 | Apr 21-25 | AI agent + single thesis generation end-to-end | Done |
-| S3 | Apr 28-May 1 | Thesis view + editing + broker research upload | Done |
-| S4 | May 5-9 | Dashboard polish (search/filter/badges) + bulk upload | Done |
-| S5 | May 12-16 | Integration testing + ship prep + runStreamed migration | Done |
+| Sprint | Phase | Week | Focus | Status |
+|--------|-------|------|-------|--------|
+| S1 | 1 | Apr 14-18 | Foundation — Docker, DB schema, Express + React scaffold, dashboard shell | Done |
+| S2 | 1 | Apr 21-25 | AI agent + single thesis generation end-to-end | Done |
+| S3 | 1 | Apr 28-May 1 | Thesis view + editing + broker research upload | Done |
+| S4 | 1 | May 5-9 | Dashboard polish (search/filter/badges) + bulk upload | Done |
+| S5 | 1 | May 12-16 | Integration testing + ship prep + runStreamed migration | Done |
+| S6 | 2 | May 19-23 | Weekly monitoring vertical slice — market data + AI analysis + manual trigger | Done |
+| S7 | 2 | May 26-30 | Scheduled batch monitoring — node-cron + BullMQ + dashboard | |
+| S8 | 2 | Jun 2-6 | Email digest + polish | |
+| S9 | 2 | Jun 9-13 | Test hardening + Phase 3 prep | |
 
 ## Git Workflow
 

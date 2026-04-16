@@ -2,10 +2,16 @@ import { Codex, type ThreadEvent } from "@openai/codex-sdk";
 import * as z from "zod";
 import {
   thesisOutputSchema,
+  weeklyLogOutputSchema,
   type ThesisOutput,
   type WeeklyLogOutput,
 } from "./schemas.js";
-import { buildGenerationPrompt, type GenerationInput } from "./prompts.js";
+import {
+  buildGenerationPrompt,
+  buildWeeklyPrompt,
+  type GenerationInput,
+  type WeeklyAnalysisInput,
+} from "./prompts.js";
 import { config } from "../config.js";
 
 export class ThesisAgent {
@@ -84,13 +90,47 @@ export class ThesisAgent {
 
   /**
    * Analyse a holding's weekly news, price action, and broker research
-   * against its thesis pillars and assumptions. Phase 2 implementation.
+   * against its thesis pillars and assumptions.
    */
   async analyseWeekly(
-    _holdingId: string,
-    _thesisId: string,
-    _signal?: AbortSignal,
+    input: WeeklyAnalysisInput,
+    signal?: AbortSignal,
+    onEvent?: (event: ThreadEvent) => void,
   ): Promise<WeeklyLogOutput> {
-    throw new Error("Not implemented — Phase 2");
+    const thread = this.codex.startThread({
+      workingDirectory: process.cwd(),
+      additionalDirectories:
+        input.researchFilePaths.length > 0 ? ["/data/documents"] : [],
+      sandboxMode: "read-only",
+      webSearchMode: "live",
+      networkAccessEnabled: true,
+      approvalPolicy: "never",
+      modelReasoningEffort: "low", // TODO: bump to high once in production
+      skipGitRepoCheck: true,
+    });
+
+    const prompt = buildWeeklyPrompt(input);
+    const jsonSchema = z.toJSONSchema(weeklyLogOutputSchema);
+
+    const { events } = await thread.runStreamed(prompt, {
+      outputSchema: jsonSchema,
+      signal,
+    });
+
+    let finalText = "";
+    for await (const event of events) {
+      onEvent?.(event);
+      if (
+        event.type === "item.completed" &&
+        event.item.type === "agent_message"
+      ) {
+        finalText = event.item.text;
+      }
+      if (event.type === "turn.failed") {
+        throw new Error(event.error.message);
+      }
+    }
+
+    return weeklyLogOutputSchema.parse(JSON.parse(finalText));
   }
 }
