@@ -44,6 +44,8 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      MONITORING_CRON_SCHEDULE: ${MONITORING_CRON_SCHEDULE:-0 6 * * 1}
+      MONITORING_CONCURRENCY: ${MONITORING_CONCURRENCY:-10}
     volumes:
       - ./src:/app/src
       - ./package.json:/app/package.json
