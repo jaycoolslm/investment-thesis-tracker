@@ -22,6 +22,7 @@
     ]
   },
   "dependencies": {
+    "@openai/codex": "^0.120.0",
     "@openai/codex-sdk": "^0.120.0",
     "bullmq": "^5.73.5",
     "cors": "^2.8.6",

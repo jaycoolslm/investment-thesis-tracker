@@ -1,18 +1,19 @@
 import { EventEmitter } from "events";
 import { eq } from "drizzle-orm";
+import type { ThreadEvent } from "@openai/codex-sdk";
 import { db } from "../db/index.js";
 import { holdings, theses, thesisPillars, documents } from "../db/schema.js";
 import { ThesisAgent } from "../agent/codex-agent.js";
 import { type ThesisOutput } from "../agent/schemas.js";
+import path from "node:path";
 
-export type GenerationStep =
-  | "generation_started"
-  | "searching_market_data"
-  | "analysing_broker_research"
-  | "building_thesis_pillars"
-  | "compiling_document"
-  | "generation_complete"
-  | "generation_failed";
+export type ProgressEvent =
+  | { type: "started" }
+  | { type: "web_search"; query: string }
+  | { type: "file_read"; path: string }
+  | { type: "activity"; message: string }
+  | { type: "complete" }
+  | { type: "failed"; error: string };
 
 export class ThesisGenerationService extends EventEmitter {
   private agent: ThesisAgent;
@@ -33,7 +34,7 @@ export class ThesisGenerationService extends EventEmitter {
       throw new HoldingNotFoundError(holdingId);
     }
 
-    this.emit("progress", "generation_started" satisfies GenerationStep);
+    this.emitProgress({ type: "started" });
 
     // 2. Fetch uploaded documents
     const docs = await db
@@ -42,16 +43,7 @@ export class ThesisGenerationService extends EventEmitter {
       .where(eq(documents.holdingId, holdingId));
     const filePaths = docs.map((d) => d.filePath);
 
-    this.emit("progress", "searching_market_data" satisfies GenerationStep);
-
-    if (filePaths.length > 0) {
-      this.emit(
-        "progress",
-        "analysing_broker_research" satisfies GenerationStep,
-      );
-    }
-
-    // 3. Call agent with 60s timeout
+    // 3. Call agent with streaming events
     let result: ThesisOutput;
     try {
       result = await this.agent.generateThesis(
@@ -64,21 +56,59 @@ export class ThesisGenerationService extends EventEmitter {
           researchFilePaths: filePaths,
         },
         AbortSignal.timeout(900_000),
+        (event) => this.handleAgentEvent(event),
       );
     } catch (err) {
-      this.emit("progress", "generation_failed" satisfies GenerationStep);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      this.emitProgress({ type: "failed", error: message });
       throw err;
     }
-
-    this.emit("progress", "building_thesis_pillars" satisfies GenerationStep);
 
     // 4. Persist in transaction
     const thesisId = await this.persistThesis(holdingId, result);
 
-    this.emit("progress", "compiling_document" satisfies GenerationStep);
-    this.emit("progress", "generation_complete" satisfies GenerationStep);
+    this.emitProgress({ type: "complete" });
 
     return thesisId;
+  }
+
+  private lastWebSearchCompleted = false;
+
+  private handleAgentEvent(event: ThreadEvent): void {
+    switch (event.type) {
+      case "item.started":
+        if (event.item.type === "file_change") {
+          const filePath = event.item.changes?.[0]?.path;
+          if (filePath) {
+            this.emitProgress({
+              type: "file_read",
+              path: path.basename(filePath),
+            });
+          }
+        }
+        // When agent_message starts after searches, the model is compiling
+        if (event.item.type === "agent_message" && this.lastWebSearchCompleted) {
+          this.emitProgress({
+            type: "activity",
+            message: "Compiling thesis...",
+          });
+        }
+        break;
+
+      case "item.completed":
+        if (event.item.type === "web_search" && event.item.query) {
+          this.lastWebSearchCompleted = true;
+          this.emitProgress({
+            type: "web_search",
+            query: event.item.query,
+          });
+        }
+        break;
+    }
+  }
+
+  private emitProgress(event: ProgressEvent): void {
+    this.emit("progress", event);
   }
 
   private async persistThesis(

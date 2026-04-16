@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Sprint 4 complete (May 5-9). Dashboard has real-time search (Cmd+K), filter chips (direction + status), SVG sort icons with aria-sort, and "failed" status badge. Bulk upload: .xlsx/.csv parsing with ExcelJS, validation preview table with inline editing, BullMQ job queue (concurrency 3, 2 retry attempts), SSE progress banner with ETA, results modal with per-row retry. Codex agent now uses web search (live) and high reasoning effort. Starting Sprint 5 (integration testing + ship prep).
+Sprint 5 complete (May 12-16). Phase 1 shipped. Sprint 5 added: test infrastructure (Vitest unit + Testcontainers integration + Playwright E2E), Weekly Log tab with TanStack Table, holding status management (active/closed/paused) with dashboard filter chips, React error boundary, production Docker build (Express static serving + SPA fallback). Post-sprint: switched from `thread.run()` to `thread.runStreamed()` for real-time generation progress — modal now shows live web search queries and a "Compiling thesis..." step instead of fake checkpoints. Added `@openai/codex` as direct dependency for Docker binary resolution. Note: Codex CLI exec mode does not emit reasoning events (SDK types define `ReasoningItem` but the JSONL stream never includes them — tracked upstream at openai/codex#5339).
 
 ## Key Documents
 
@@ -25,7 +25,7 @@ Read these before making architectural or UX decisions:
 - **Database**: PostgreSQL 16 + Drizzle ORM 0.45 (pg driver)
 - **Validation**: Zod v4 (env config, API input, AI output)
 - **Jobs**: BullMQ + Redis (concurrency 3, 2 retry attempts with exponential backoff)
-- **AI**: Codex CLI SDK (`@openai/codex-sdk`) → Azure OpenAI (GPT 5.1 Codex, web search live, high reasoning)
+- **AI**: Codex CLI SDK (`@openai/codex-sdk` + `@openai/codex`) → Azure OpenAI (GPT 5.4-mini, web search live, `runStreamed` for progress events)
 - **File parsing**: ExcelJS (read/write .xlsx + .csv for bulk upload + template generation)
 - **Containers**: Docker Compose (api + postgres + redis)
 - **Package manager**: pnpm (separate package.json for root backend + web/ frontend)
@@ -37,6 +37,8 @@ Read these before making architectural or UX decisions:
 3. **No provider abstraction in v1.** A thin `ThesisAgent` wrapper class isolates the SDK from business logic. That's enough. Extract an interface when a second provider is actually needed.
 4. **Thesis pillars are first-class DB rows** (not JSONB) so weekly logs can reference them by ID.
 5. **Weekly logs are append-only.** `pillar_refs` is JSONB — a snapshot of which pillars were impacted.
+6. **Generation progress uses `runStreamed()`.** Real SDK events (web searches, agent_message start) are forwarded via SSE to the frontend. The Codex exec JSONL stream does NOT emit reasoning items — the `ReasoningItem` type exists in the SDK but is never sent. Don't attempt `model_reasoning_summary` config; it has no effect in exec mode.
+7. **`@openai/codex` must be a direct dependency** (not just transitive via `@openai/codex-sdk`). pnpm's strict hoisting prevents the SDK's `require.resolve()` chain from finding the platform-specific binary otherwise. This affects Docker builds.
 
 ## Running Locally
 
@@ -107,13 +109,14 @@ thesis-tracking/
         Layout.tsx              — Shared header + Outlet + modals + toasts + bulk state management
         HoldingsTable.tsx       — TanStack Table, 7 columns, sorting, globalFilterFn, row click, delete
         SearchBar.tsx           — Search input with Cmd+K shortcut, clear button, focus states
-        FilterChips.tsx         — All/Long/Short/Strengthened/Weakened/Unchanged toggle chips
+        FilterChips.tsx         — All/Long/Short/Strengthened/Weakened/Unchanged/Active/Closed/Paused toggle chips
         AddHoldingModal.tsx     — Radix Dialog: ticker, direction, benchmark, bullets, file upload
         BulkUploadModal.tsx     — Multi-step: file drop → validation preview table → generate
         BulkValidationTable.tsx — TanStack Table preview with inline editing for error rows
         BulkProgressBanner.tsx  — Persistent progress bar with ETA and cancel (between header + main)
         BulkResultsModal.tsx    — Post-completion: failure table with per-row retry
-        GenerationProgress.tsx  — Multi-step progress indicator (SSE-driven)
+        GenerationProgress.tsx  — Live activity feed (SSE-driven): web search queries + "Compiling thesis..." step
+        ErrorFallback.tsx       — React error boundary fallback UI
         FileDropZone.tsx        — Configurable drag-and-drop upload zone (PDF/DOCX or XLSX/CSV)
         EditableText.tsx        — Click-to-edit: Tiptap (multiline) or input (singleline), auto-save
         ConfirmDialog.tsx       — Reusable Radix AlertDialog wrapper
@@ -134,6 +137,8 @@ thesis-tracking/
           SourcesList.tsx       — Read-only web sources list
           BrokerResearchPanel.tsx — File list + upload drop zone + delete
           BenchmarkEditor.tsx   — Benchmark index Radix Select dropdown
+          StatusEditor.tsx      — Holding status (active/closed/paused) Radix Select
+          WeeklyLogTable.tsx    — TanStack Table for weekly logs (empty state when no data)
       hooks/
         useHoldings.ts          — TanStack Query: useHoldings, useCreateHolding, useDeleteHolding
         useThesis.ts            — useThesis + useHolding query hooks
@@ -141,7 +146,8 @@ thesis-tracking/
         useDocuments.ts         — useDocuments, useUploadDocument, useDeleteDocument
         useAutoSave.ts          — Debounced save with status tracking
         useGenerateThesis.ts    — Mutation: create holding → upload files
-        useGenerationProgress.ts — SSE progress tracking (fires generation after EventSource connects)
+        useGenerationProgress.ts — SSE progress: live activity log from runStreamed events
+        useWeeklyLogs.ts        — TanStack Query: weekly logs for a holding
         useBulkUpload.ts        — TanStack Query mutation for bulk file upload
         useBulkProgress.ts      — SSE subscription for bulk generation progress + ETA
         useBulkRetry.ts         — Mutation for retrying failed bulk holdings
@@ -178,7 +184,7 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 | S2 | Apr 21-25 | AI agent + single thesis generation end-to-end | Done |
 | S3 | Apr 28-May 1 | Thesis view + editing + broker research upload | Done |
 | S4 | May 5-9 | Dashboard polish (search/filter/badges) + bulk upload | Done |
-| S5 | May 12-16 | Integration testing + ship prep | |
+| S5 | May 12-16 | Integration testing + ship prep + runStreamed migration | Done |
 
 ## Git Workflow
 

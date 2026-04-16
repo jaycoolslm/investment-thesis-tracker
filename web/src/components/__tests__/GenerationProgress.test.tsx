@@ -37,31 +37,9 @@ describe("GenerationProgress", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders progress steps", () => {
+  it("shows starting state when no events received", () => {
     render(<GenerationProgress {...defaultProps} />);
-    expect(
-      screen.getByText("Searching for latest market data..."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Building thesis pillars..."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Compiling thesis document..."),
-    ).toBeInTheDocument();
-  });
-
-  it("shows broker research step when hasDocuments is true", () => {
-    render(<GenerationProgress {...defaultProps} hasDocuments={true} />);
-    expect(
-      screen.getByText("Analysing broker research..."),
-    ).toBeInTheDocument();
-  });
-
-  it("hides broker research step when hasDocuments is false", () => {
-    render(<GenerationProgress {...defaultProps} hasDocuments={false} />);
-    expect(
-      screen.queryByText("Analysing broker research..."),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("Starting up...")).toBeInTheDocument();
   });
 
   it("shows timing guidance", () => {
@@ -69,5 +47,15 @@ describe("GenerationProgress", () => {
     expect(
       screen.getByText("This typically takes 30-60 seconds."),
     ).toBeInTheDocument();
+  });
+
+  it("has an activity feed region", () => {
+    render(<GenerationProgress {...defaultProps} />);
+    expect(screen.getByRole("list", { name: /agent activity/i })).toBeInTheDocument();
+  });
+
+  it("renders spinner while generating", () => {
+    const { container } = render(<GenerationProgress {...defaultProps} />);
+    expect(container.querySelector(".animate-spin")).not.toBeNull();
   });
 });

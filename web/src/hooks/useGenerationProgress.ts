@@ -1,35 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { generateThesis } from "../api/client.ts";
 
-export type StepStatus = "pending" | "active" | "completed" | "failed";
-
-export interface ProgressStep {
+export interface ActivityItem {
   id: string;
-  label: string;
-  status: StepStatus;
-}
-
-const STEP_ORDER = [
-  "generation_started",
-  "searching_market_data",
-  "analysing_broker_research",
-  "building_thesis_pillars",
-  "compiling_document",
-  "generation_complete",
-] as const;
-
-function buildSteps(hasDocuments: boolean): ProgressStep[] {
-  const steps: ProgressStep[] = [
-    { id: "searching_market_data", label: "Searching for latest market data...", status: "pending" },
-  ];
-  if (hasDocuments) {
-    steps.push({ id: "analysing_broker_research", label: "Analysing broker research...", status: "pending" });
-  }
-  steps.push(
-    { id: "building_thesis_pillars", label: "Building thesis pillars...", status: "pending" },
-    { id: "compiling_document", label: "Compiling thesis document...", status: "pending" },
-  );
-  return steps;
+  type: "web_search" | "file_read" | "activity";
+  text: string;
 }
 
 export function useGenerationProgress(
@@ -37,52 +12,60 @@ export function useGenerationProgress(
   bullets: string,
   hasDocuments: boolean,
 ) {
-  const [steps, setSteps] = useState<ProgressStep[]>(() => buildSteps(hasDocuments));
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [isComplete, setIsComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const generationFired = useRef(false);
+  const activityCounter = useRef(0);
 
-  const updateStep = useCallback((stepId: string) => {
-    setSteps((prev) =>
-      prev.map((s) => {
-        if (s.id === stepId) return { ...s, status: "active" };
-        const stepIndex = STEP_ORDER.indexOf(stepId as (typeof STEP_ORDER)[number]);
-        const currentIndex = STEP_ORDER.indexOf(s.id as (typeof STEP_ORDER)[number]);
-        if (currentIndex < stepIndex && s.status !== "completed") {
-          return { ...s, status: "completed" };
-        }
-        return s;
-      }),
-    );
-  }, []);
+  const addActivity = useCallback(
+    (type: ActivityItem["type"], text: string) => {
+      const id = String(++activityCounter.current);
+      setActivity((prev) => [...prev, { id, type, text }]);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!holdingId) return;
 
-    setSteps(buildSteps(hasDocuments));
+    setActivity([]);
     setIsComplete(false);
     setError(null);
+    activityCounter.current = 0;
 
     let cancelled = false;
 
-    // Connect SSE directly to API server — Vite's proxy buffers streaming responses
-    // which prevents EventSource from receiving events. In production, use relative URL.
+    // Connect SSE directly to API server in dev (Vite proxy buffers SSE)
     const baseUrl = import.meta.env.DEV ? "http://localhost:3001" : "";
-    const es = new EventSource(`${baseUrl}/api/holdings/${holdingId}/progress`);
+    const es = new EventSource(
+      `${baseUrl}/api/holdings/${holdingId}/progress`,
+    );
 
     es.onmessage = (event) => {
       if (cancelled) return;
       try {
         const data = JSON.parse(event.data);
-        if (data.step === "generation_complete") {
-          setSteps((prev) => prev.map((s) => ({ ...s, status: "completed" })));
-          setIsComplete(true);
-          es.close();
-        } else if (data.step === "generation_failed") {
-          setError("Generation failed. Please try again.");
-          es.close();
-        } else {
-          updateStep(data.step);
+
+        switch (data.type) {
+          case "web_search":
+            addActivity("web_search", data.query);
+            break;
+          case "file_read":
+            addActivity("file_read", data.path);
+            break;
+          case "activity":
+            addActivity("activity", data.message);
+            break;
+          case "complete":
+            setIsComplete(true);
+            es.close();
+            break;
+          case "failed":
+            setError(data.error ?? "Generation failed. Please try again.");
+            es.close();
+            break;
+          // "started" — no-op, modal is already visible
         }
       } catch {
         // ignore malformed
@@ -91,11 +74,9 @@ export function useGenerationProgress(
 
     es.onerror = () => {
       // EventSource auto-reconnects on transient errors.
-      // If the stream was intentionally closed (generation_complete), this fires
-      // once more — but cancelled/isComplete guards prevent side effects.
     };
 
-    // Fire generation AFTER EventSource is open (onopen fires when connected)
+    // Fire generation AFTER EventSource is open
     es.onopen = () => {
       if (cancelled) return;
       if (generationFired.current) return;
@@ -103,7 +84,9 @@ export function useGenerationProgress(
 
       generateThesis(holdingId, bullets).catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Generation failed.");
+          setError(
+            err instanceof Error ? err.message : "Generation failed.",
+          );
           es.close();
         }
       });
@@ -114,7 +97,7 @@ export function useGenerationProgress(
       generationFired.current = false;
       es.close();
     };
-  }, [holdingId, bullets, hasDocuments, updateStep]);
+  }, [holdingId, bullets, hasDocuments, addActivity]);
 
-  return { steps, isComplete, error };
+  return { activity, isComplete, error };
 }

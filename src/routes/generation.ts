@@ -3,7 +3,7 @@ import * as z from "zod";
 import {
   ThesisGenerationService,
   HoldingNotFoundError,
-  type GenerationStep,
+  type ProgressEvent,
 } from "../services/thesis-generation.js";
 import { progressEmitter } from "../progress.js";
 
@@ -32,10 +32,10 @@ generationRouter.get("/holdings/:id/progress", (req, res) => {
   // Flush headers immediately so EventSource fires onopen
   res.flushHeaders();
 
-  function onProgress(event: { step: string; status: string }) {
+  function onProgress(event: ProgressEvent) {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
 
-    if (event.step === "generation_complete" || event.step === "generation_failed") {
+    if (event.type === "complete" || event.type === "failed") {
       // Give client a moment to process the final event, then close
       setTimeout(() => res.end(), 100);
     }
@@ -68,16 +68,16 @@ generationRouter.post("/holdings/:id/generate", async (req, res) => {
   const holdingId = idResult.data;
   const service = new ThesisGenerationService();
 
-  // Emit progress events to any SSE listeners
-  service.on("progress", (step: GenerationStep) => {
-    const status = step === "generation_failed" ? "failed" : "active";
-    progressEmitter.emit(holdingId, { step, status });
+  // Forward progress events to any SSE listeners
+  service.on("progress", (event: ProgressEvent) => {
+    progressEmitter.emit(holdingId, event);
   });
 
   try {
     const thesisId = await service.generate(holdingId, bodyResult.data.bullets);
     res.status(201).json({ thesisId });
   } catch (err) {
+    console.error("[generate] Error for holding", holdingId, err);
     if (err instanceof HoldingNotFoundError) {
       res.status(404).json({ error: "Holding not found" });
       return;
