@@ -11,6 +11,13 @@ const envSchema = z.object({
   AZURE_OPENAI_API_KEY: z.string().optional().transform((v) => v || undefined),
   MONITORING_CRON_SCHEDULE: z.string().default("0 6 * * 1"),
   MONITORING_CONCURRENCY: z.coerce.number().int().positive().default(10),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
+  EMAIL_TO: z.string().optional(),
+  APP_URL: z.string().url().optional().default("http://localhost:5173"),
 });
 
 const parsed = envSchema.safeParse(process.env);

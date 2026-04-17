@@ -1,8 +1,10 @@
 import { Router } from "express";
+import { sql } from "drizzle-orm";
 import { progressEmitter } from "../progress.js";
 import { getMonitoringBatchState } from "../jobs/queue.js";
 import { runMonitoringBatch } from "../jobs/scheduler.js";
 import { getCurrentWeek } from "../services/weekly-monitoring.js";
+import { db } from "../db/index.js";
 
 export const monitoringRouter = Router();
 
@@ -103,4 +105,42 @@ monitoringRouter.get("/monitoring/progress", async (req, res) => {
   req.on("close", () => {
     progressEmitter.off(eventKey, onEvent);
   });
+});
+
+// GET /api/monitoring/history — Past batch run summaries aggregated from weekly_logs
+monitoringRouter.get("/monitoring/history", async (_req, res) => {
+  const rows = await db.execute<{
+    week_label: string;
+    week_date: string;
+    total: string;
+    strengthened: string;
+    weakened: string;
+    unchanged: string;
+    started_at: string;
+  }>(sql`
+    SELECT
+      week_label,
+      week_date,
+      COUNT(*)::text AS total,
+      COUNT(*) FILTER (WHERE thesis_impact = 'strengthened')::text AS strengthened,
+      COUNT(*) FILTER (WHERE thesis_impact = 'weakened')::text AS weakened,
+      COUNT(*) FILTER (WHERE thesis_impact = 'unchanged')::text AS unchanged,
+      MIN(created_at)::text AS started_at
+    FROM weekly_logs
+    GROUP BY week_label, week_date
+    ORDER BY week_date DESC
+    LIMIT 20
+  `);
+
+  res.json(
+    rows.rows.map((r) => ({
+      weekLabel: r.week_label,
+      weekDate: r.week_date,
+      total: parseInt(r.total, 10),
+      strengthened: parseInt(r.strengthened, 10),
+      weakened: parseInt(r.weakened, 10),
+      unchanged: parseInt(r.unchanged, 10),
+      startedAt: r.started_at,
+    })),
+  );
 });

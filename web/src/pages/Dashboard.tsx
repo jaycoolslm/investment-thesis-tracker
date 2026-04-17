@@ -6,6 +6,7 @@ import { LoadingSkeleton } from "../components/LoadingSkeleton.tsx";
 import { EmptyState } from "../components/EmptyState.tsx";
 import { SearchBar } from "../components/SearchBar.tsx";
 import { FilterChips } from "../components/FilterChips.tsx";
+import { MonitoringHistory } from "../components/MonitoringHistory.tsx";
 
 interface LayoutContext {
   onAddHolding: () => void;
@@ -89,6 +90,7 @@ export function Dashboard() {
               onClearFilters={handleClearFilters}
             />
           </div>
+          <MonitoringHistory />
         </>
       )}
     </div>

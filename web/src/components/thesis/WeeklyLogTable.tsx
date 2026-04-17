@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-table";
 import { useState } from "react";
 import clsx from "clsx";
-import type { WeeklyLog } from "../../api/client.ts";
+import type { WeeklyLog, PillarRef } from "../../api/client.ts";
 import { useTriggerWeeklyMonitoring } from "../../hooks/useWeeklyMonitoring.ts";
 import { useToast } from "../../hooks/useToast.ts";
 
@@ -87,11 +87,31 @@ const columns = [
   }),
   columnHelper.accessor("summary", {
     header: "Summary",
-    cell: (info) => (
-      <span className="text-sm text-brand-700 line-clamp-2">
-        {info.getValue() ?? "\u2014"}
-      </span>
-    ),
+    cell: (info) => {
+      const pillars = info.row.original.pillarRefs as PillarRef[] | null;
+      return (
+        <div>
+          <span className="text-sm text-brand-700 line-clamp-2">
+            {info.getValue() ?? "\u2014"}
+          </span>
+          {pillars && pillars.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {pillars.map((p) => (
+                <span
+                  key={p.pillarId}
+                  className={clsx(
+                    "text-[11px] font-medium px-1.5 py-0.5 rounded",
+                    impactClass(p.impact),
+                  )}
+                >
+                  {p.pillarTitle}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    },
   }),
 ];
 

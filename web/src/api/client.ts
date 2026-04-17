@@ -8,6 +8,7 @@ export interface Holding {
   latestImpact: "strengthened" | "weakened" | "unchanged" | null;
   lastUpdated: string | null;
   createdAt: string;
+  weakenedStreak?: boolean;
 }
 
 export interface CreateHoldingInput {
@@ -228,6 +229,12 @@ export function reorderPillars(
 
 // Weekly logs
 
+export interface PillarRef {
+  pillarId: string;
+  pillarTitle: string;
+  impact: "strengthened" | "weakened" | "unchanged";
+}
+
 export interface WeeklyLog {
   id: string;
   holdingId: string;
@@ -238,7 +245,7 @@ export interface WeeklyLog {
   relativePerf: string | null;
   thesisImpact: "strengthened" | "weakened" | "unchanged" | null;
   summary: string | null;
-  pillarRefs: unknown;
+  pillarRefs: PillarRef[] | null;
   sources: unknown;
   createdAt: string;
 }
@@ -270,4 +277,20 @@ export function triggerMonitoringBatch(): Promise<MonitoringBatchStatus> {
 
 export function getMonitoringStatus(): Promise<MonitoringBatchStatus> {
   return apiFetch("/api/monitoring/status");
+}
+
+// Monitoring history
+
+export interface MonitoringHistoryEntry {
+  weekLabel: string;
+  weekDate: string;
+  total: number;
+  strengthened: number;
+  weakened: number;
+  unchanged: number;
+  startedAt: string;
+}
+
+export function getMonitoringHistory(): Promise<MonitoringHistoryEntry[]> {
+  return apiFetch("/api/monitoring/history");
 }

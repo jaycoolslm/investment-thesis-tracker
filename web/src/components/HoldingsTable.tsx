@@ -75,7 +75,19 @@ function getColumns(onDelete?: (id: string) => void) {
     }),
     columnHelper.accessor("latestImpact", {
       header: "Impact",
-      cell: (info) => <StatusBadge status={info.getValue()} />,
+      cell: (info) => (
+        <span className="flex items-center gap-1.5">
+          <StatusBadge status={info.getValue()} />
+          {info.row.original.weakenedStreak && (
+            <span
+              className="text-[10px] font-semibold text-status-red-600 bg-status-red-50 px-1 py-0.5 rounded"
+              title="Weakened for 3+ consecutive weeks"
+            >
+              3w
+            </span>
+          )}
+        </span>
+      ),
     }),
     columnHelper.display({
       id: "weekChange",

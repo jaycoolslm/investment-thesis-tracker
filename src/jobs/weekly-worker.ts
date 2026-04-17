@@ -65,6 +65,7 @@ export const monitoringWorker = new Worker<MonitoringJobData>(
           total,
           failures: failures.map((f: string) => JSON.parse(f)),
         });
+        progressEmitter.emit("monitoring:digest", { weekLabel, completed, failed, total });
       }
     } catch (err) {
       const errorMessage =
@@ -127,6 +128,7 @@ export const monitoringWorker = new Worker<MonitoringJobData>(
             total,
             failures: failures.map((f: string) => JSON.parse(f)),
           });
+          progressEmitter.emit("monitoring:digest", { weekLabel, completed, failed, total });
         }
       } else {
         console.log(

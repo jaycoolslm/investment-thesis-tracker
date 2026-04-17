@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as z from "zod";
 import { db } from "../db/index.js";
 import { holdings } from "../db/schema.js";
@@ -40,7 +40,28 @@ holdingsRouter.get("/holdings", async (req, res) => {
           .where(eq(holdings.status, status))
           .orderBy(holdings.ticker);
 
-  res.json(rows);
+  // Find holdings with 3+ consecutive weakened weeks
+  const streakResult = await db.execute<{ holding_id: string }>(sql`
+    WITH ranked AS (
+      SELECT holding_id, thesis_impact,
+        ROW_NUMBER() OVER (PARTITION BY holding_id ORDER BY week_label DESC) AS rn
+      FROM weekly_logs
+    )
+    SELECT holding_id FROM ranked
+    WHERE rn <= 3
+    GROUP BY holding_id
+    HAVING COUNT(*) = 3
+      AND COUNT(*) FILTER (WHERE thesis_impact = 'weakened') = 3
+  `);
+
+  const streakIds = new Set(streakResult.rows.map((r) => r.holding_id));
+
+  res.json(
+    rows.map((h) => ({
+      ...h,
+      weakenedStreak: streakIds.has(h.id),
+    })),
+  );
 });
 
 // POST /api/holdings
