@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Phase 2 Sprint 7 complete. Phase 1 shipped (Sprints 1-5). Sprint 6 added weekly monitoring vertical slice (single-holding manual trigger). Sprint 7 added scheduled batch monitoring: `node-cron` v4 scheduler (configurable, default Monday 6 AM, `noOverlap: true`), separate `weekly-monitoring` BullMQ queue (concurrency 10, 3x retry with exponential backoff), `weekly-worker.ts` calling `WeeklyMonitoringService.monitorHolding()` per job, `HSETNX`-based idempotency to prevent duplicate batches, `runMonitoringBatch()` shared by cron + manual trigger. Three new API endpoints: `POST /api/monitoring/trigger` (202), `GET /api/monitoring/status`, `GET /api/monitoring/progress` (SSE). Frontend: "Run Weekly Monitoring" button in header, real-time monitoring progress banner (reuses `BulkProgressBanner` with configurable `label`/`onCancel`), `useMonitoringProgress` SSE hook, `useMonitoringStatus` for active-batch detection on page load, completion toasts. `getCurrentWeek()` extracted from `WeeklyMonitoringService` to standalone export (accepts optional `now` param for testability). Integration tests deferred to Sprint 9. Note: `modelReasoningEffort` set to `"low"` for both generation and weekly analysis during dev (TODO: bump to high for production).
+Phase 2 Sprint 8 complete. Phase 1 shipped (Sprints 1-5). Sprint 6: single-holding weekly monitoring. Sprint 7: scheduled batch monitoring (node-cron + BullMQ + dashboard). Sprint 8 added: weekly email digest — `EmailService` class with Nodemailer SMTP transport (configurable, graceful skip when not configured), inline-CSS HTML template (`buildDigestHtml`) with color-coded impact/prices and ticker links, triggered via `monitoring:digest` fixed-key event on `progressEmitter` after batch completion. `GET /api/monitoring/history` endpoint aggregating `weekly_logs` by week with PostgreSQL `FILTER (WHERE ...)`. Dashboard: `MonitoringHistory` table below holdings. Weekly Log tab: pillar impact chips (colored by impact from `pillarRefs` JSONB). Holdings table: weakness streak "3w" badge for 3+ consecutive weakened weeks (CTE window query in `GET /api/holdings`). `PillarRef` type added to frontend, `WeeklyLog.pillarRefs` typed. 10 unit tests for email template + service. Integration tests deferred to Sprint 9. Note: `modelReasoningEffort` set to `"low"` for both generation and weekly analysis during dev (TODO: bump to high for production).
 
 ## Key Documents
 
@@ -26,6 +26,7 @@ Read these before making architectural or UX decisions:
 - **Validation**: Zod v4 (env config, API input, AI output)
 - **Jobs**: BullMQ + Redis (bulk-generation: concurrency 3, 2 retries; weekly-monitoring: concurrency 10, 3 retries)
 - **Scheduling**: node-cron v4 (weekly monitoring cron, configurable via `MONITORING_CRON_SCHEDULE`)
+- **Email**: Nodemailer v8 SMTP (optional — configurable via `SMTP_*` env vars, graceful skip when not set)
 - **AI**: Codex CLI SDK (`@openai/codex-sdk` + `@openai/codex`) → Azure OpenAI (GPT 5.4-mini, web search live, `runStreamed` for progress events)
 - **Market data**: `yahoo-finance2` v3 (weekly price returns for tickers + benchmark indices, no API key needed)
 - **File parsing**: ExcelJS (read/write .xlsx + .csv for bulk upload + template generation)
@@ -76,7 +77,7 @@ thesis-tracking/
       theses.ts                — GET thesis + PATCH thesis + pillar CRUD + reorder
       documents.ts             — POST/GET/DELETE /api/holdings/:id/documents
       bulk.ts                  — Bulk upload: parse/preview, start, SSE progress, cancel, retry, template
-      monitoring.ts            — Batch monitoring: POST trigger, GET status, GET progress (SSE)
+      monitoring.ts            — Batch monitoring: POST trigger, GET status, GET progress (SSE), GET history
     agent/
       codex-agent.ts           — ThesisAgent: generateThesis() + analyseWeekly() wrapping @openai/codex-sdk
       prompts.ts               — buildGenerationPrompt() + buildWeeklyPrompt() + input interfaces
@@ -84,6 +85,8 @@ thesis-tracking/
     services/
       thesis-generation.ts     — Orchestrates: validate → agent call → persist in transaction
       weekly-monitoring.ts     — Weekly monitoring: market data → agent analysis → persist log + update holding + getCurrentWeek() export
+      email.ts                — EmailService: Nodemailer SMTP digest after batch monitoring completes
+      email-template.ts       — Pure function buildDigestHtml(): inline-CSS HTML email template
       market-data.ts           — yahoo-finance2 wrapper: weekly returns for tickers + benchmark indices
       bulk-generation.ts       — Bulk orchestration: parse → cache rows in Redis → create holdings → enqueue
       file-parser.ts           — ExcelJS .xlsx/.csv parsing + Zod per-row validation
@@ -122,6 +125,7 @@ thesis-tracking/
         BulkProgressBanner.tsx  — Reusable progress banner with ETA, optional cancel + label (bulk + monitoring)
         BulkResultsModal.tsx    — Post-completion: failure table with per-row retry
         GenerationProgress.tsx  — Live activity feed (SSE-driven): web search queries + "Compiling thesis..." step
+        MonitoringHistory.tsx    — Past monitoring batch runs table (week, counts, impact breakdown)
         ErrorFallback.tsx       — React error boundary fallback UI
         FileDropZone.tsx        — Configurable drag-and-drop upload zone (PDF/DOCX or XLSX/CSV)
         EditableText.tsx        — Click-to-edit: Tiptap (multiline) or input (singleline), auto-save
@@ -160,6 +164,7 @@ thesis-tracking/
         useBulkRetry.ts         — Mutation for retrying failed bulk holdings
         useMonitoringProgress.ts — SSE subscription for batch monitoring progress + ETA
         useMonitoringStatus.ts  — TanStack Query: detect active monitoring batch on page load
+        useMonitoringHistory.ts — TanStack Query: past batch run summaries
         useToast.ts             — Toast state management
       api/
         client.ts               — Typed fetch: holdings, theses, pillars, documents, generation, monitoring
@@ -196,7 +201,7 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 | S5 | 1 | May 12-16 | Integration testing + ship prep + runStreamed migration | Done |
 | S6 | 2 | May 19-23 | Weekly monitoring vertical slice — market data + AI analysis + manual trigger | Done |
 | S7 | 2 | May 26-30 | Scheduled batch monitoring — node-cron + BullMQ + dashboard | Done |
-| S8 | 2 | Jun 2-6 | Email digest + polish | |
+| S8 | 2 | Jun 2-6 | Email digest + polish | Done |
 | S9 | 2 | Jun 9-13 | Test hardening + Phase 3 prep | |
 
 ## Git Workflow
