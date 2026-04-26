@@ -6,3 +6,8 @@ web/node_modules/
 data/
 *.log
 .DS_Store
+
+# Test outputs
+playwright-report/
+test-results/
+test-holdings.xlsx
