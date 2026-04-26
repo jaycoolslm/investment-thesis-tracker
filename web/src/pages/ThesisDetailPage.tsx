@@ -100,6 +100,22 @@ export function ThesisDetailPage() {
             {holding?.ticker ?? ""}
           </h2>
           {holding && <DirectionBadge direction={holding.direction} />}
+          <a
+            href={`/api/holdings/${holdingId}/export/pdf`}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-brand-700 bg-white border border-brand-200 rounded hover:bg-brand-50 hover:border-brand-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-1"
+            aria-label="Export thesis as PDF"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M8 2v8m0 0l-3-3m3 3l3-3M3 12v1a1 1 0 001 1h8a1 1 0 001-1v-1"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Export PDF
+          </a>
         </div>
 
         {holding && (

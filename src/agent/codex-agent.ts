@@ -14,36 +14,40 @@ import {
 } from "./prompts.js";
 import { config } from "../config.js";
 
+const IS_MOCK = process.env.MOCK_AGENT === "true";
+
 export class ThesisAgent {
-  private codex: Codex;
+  private codex!: Codex;
 
   constructor(codex?: Codex) {
-    this.codex =
-      codex ??
-      new Codex(
-        config.AZURE_OPENAI_ENDPOINT
-          ? {
-            config: {
-              model: "gpt-5.4-mini",
-              model_provider: "azure",
-              model_providers: {
-                azure: {
-                  name: "Azure",
-                  base_url: config.AZURE_OPENAI_ENDPOINT,
-                  wire_api: "responses",
-                  query_params: { "api-version": "2025-04-01-preview" },
-                  env_key: "AZURE_OPENAI_API_KEY",
+    if (!IS_MOCK) {
+      this.codex =
+        codex ??
+        new Codex(
+          config.AZURE_OPENAI_ENDPOINT
+            ? {
+              config: {
+                model: "gpt-5.4-mini",
+                model_provider: "azure",
+                model_providers: {
+                  azure: {
+                    name: "Azure",
+                    base_url: config.AZURE_OPENAI_ENDPOINT,
+                    wire_api: "responses",
+                    query_params: { "api-version": "2025-04-01-preview" },
+                    env_key: "AZURE_OPENAI_API_KEY",
+                  },
                 },
               },
+              env: {
+                AZURE_OPENAI_API_KEY: config.AZURE_OPENAI_API_KEY ?? "",
+              },
+            }
+            : {
+              apiKey: config.OPENAI_API_KEY,
             },
-            env: {
-              AZURE_OPENAI_API_KEY: config.AZURE_OPENAI_API_KEY ?? "",
-            },
-          }
-          : {
-            apiKey: config.OPENAI_API_KEY,
-          },
-      );
+        );
+    }
   }
 
   async generateThesis(
@@ -51,6 +55,13 @@ export class ThesisAgent {
     signal?: AbortSignal,
     onEvent?: (event: ThreadEvent) => void,
   ): Promise<ThesisOutput> {
+    if (IS_MOCK) {
+      // Return fixture data with a small delay to simulate AI processing
+      await new Promise((r) => setTimeout(r, 200));
+      const { VALID_THESIS_FIXTURE } = await import("./__tests__/fixtures.js");
+      return VALID_THESIS_FIXTURE;
+    }
+
     const thread = this.codex.startThread({
       workingDirectory: process.cwd(),
       additionalDirectories:
@@ -97,6 +108,12 @@ export class ThesisAgent {
     signal?: AbortSignal,
     onEvent?: (event: ThreadEvent) => void,
   ): Promise<WeeklyLogOutput> {
+    if (IS_MOCK) {
+      await new Promise((r) => setTimeout(r, 100));
+      const { VALID_WEEKLY_LOG_FIXTURE } = await import("./__tests__/fixtures.js");
+      return { ...VALID_WEEKLY_LOG_FIXTURE, weekLabel: input.weekLabel, weekDate: input.weekDate };
+    }
+
     const thread = this.codex.startThread({
       workingDirectory: process.cwd(),
       additionalDirectories:

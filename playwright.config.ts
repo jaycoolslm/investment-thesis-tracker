@@ -23,6 +23,9 @@ export default defineConfig({
       url: "http://localhost:3001/api/health",
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
+      env: {
+        MOCK_AGENT: "true",
+      },
     },
     {
       command: "cd web && pnpm dev",

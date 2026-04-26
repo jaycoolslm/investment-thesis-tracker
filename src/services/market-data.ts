@@ -21,6 +21,8 @@ export interface MarketDataResult {
   currency: string;
 }
 
+const IS_MOCK = process.env.MOCK_AGENT === "true";
+
 export class MarketDataService {
   /**
    * Get the week-over-week return for a ticker.
@@ -32,6 +34,9 @@ export class MarketDataService {
     ticker: string,
     weekEndDate: Date,
   ): Promise<MarketDataResult | null> {
+    if (IS_MOCK) {
+      return { priceChangePct: 2.5, currentPrice: 235.0, previousPrice: 229.3, currency: "USD" };
+    }
     try {
       const period2 = new Date(weekEndDate);
       period2.setDate(period2.getDate() + 1); // yahoo end date is exclusive
@@ -76,6 +81,10 @@ export class MarketDataService {
     benchmarkName: string,
     weekEndDate: Date,
   ): Promise<MarketDataResult | null> {
+    if (IS_MOCK) {
+      return { priceChangePct: 1.1, currentPrice: 5050, previousPrice: 4995, currency: "USD" };
+    }
+
     const symbol = BENCHMARK_SYMBOLS[benchmarkName];
     if (!symbol) return null;
     return this.getWeeklyReturn(symbol, weekEndDate);

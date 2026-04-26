@@ -415,13 +415,47 @@ Frontend: trigger button          Monitoring progress banner         Performance
 
 ---
 
-## Phase 3 Preview
+## Sprint 10 — PDF Export (Jun 16–20)
 
-After Phase 2, the PRD defines:
+**Goal**: User can export any thesis (with full weekly log history) as a professional PDF from the thesis detail page.
 
-- **Phase 3** (1–2 weeks): PDF export — thesis + full log history as downloadable PDF
-- **Future**: Multi-user RBAC, portfolio system integrations, Teams notifications, version history, sentiment scoring
+**Library**: `@react-pdf/renderer` — zero Docker impact (+5 MB, works on Alpine), declarative React components, automatic page breaks, 50–200ms generation time. Evaluated against Puppeteer (+280 MB Chromium, fragile on Alpine), PDFKit (manual layout), and jsPDF (insufficient quality).
+
+| # | Task | Req | Size | Notes |
+|---|------|-----|------|-------|
+| 10.1 | Install `@react-pdf/renderer`, configure TSX/JSX in backend tsconfig | R10 | S | Verify yoga-layout native binary works on `node:20-alpine` in Docker |
+| 10.2 | Create `src/pdf/styles.ts` — design tokens from `globals.css` as constants | R10 | S | Brand colours, Inter font registration, badge styles |
+| 10.3 | Embed Inter font files in `src/pdf/fonts/` | R10 | S | Inter-Regular, Inter-Bold, Inter-Medium TTF files (~500 KB) |
+| 10.4 | Create `src/pdf/ThesisPdf.tsx` — root PDF document component | R10 | M | Header (ticker, direction, benchmark), summary, pillars, quality, valuation, assumptions, risks, sources |
+| 10.5 | Create `src/pdf/components/WeeklyLogTablePdf.tsx` — weekly log table | R10 | M | Flexbox-based table rows, impact badges, pillar ref chips, pagination across pages |
+| 10.6 | Create `src/services/pdf-export.ts` — data assembly + `renderToBuffer()` | R10 | S | Load holding + thesis + pillars + weekly_logs, pass to ThesisPdf, return buffer |
+| 10.7 | Add route `GET /api/holdings/:id/export/pdf` | R10 | S | Content-Type: application/pdf, Content-Disposition: attachment |
+| 10.8 | Frontend: "Export PDF" button on thesis detail page header | R10 | S | Triggers download via `window.open()` or fetch + blob |
+| 10.9 | Unit test for PDF generation (buffer produced, correct page count) | R10 | S | Mock data in, verify buffer is valid PDF |
+| 10.10 | Integration test for export route (supertest + response headers) | R10 | S | Verify Content-Type, Content-Disposition, non-empty body |
+
+**Sprint 10 deliverable**: User clicks "Export PDF" on any thesis, gets a professional PDF with all sections and weekly log history. Under 10 seconds.
+
+**Gotchas to verify early (task 10.1)**:
+- `@react-pdf/renderer` v4 compatibility with React 19
+- `yoga-layout` native binary on `linux/amd64` Alpine
+- Backend tsconfig needs `"jsx": "react-jsx"` for server-side TSX
+- `renderToBuffer()` returns a `Buffer` — set `Content-Length` header for proper streaming
 
 ---
+
+## Phase 3+ Preview
+
+After Sprint 10, the PRD defines future enhancements:
+
+- **Multi-user RBAC**: Role-based access control for team collaboration
+- **Portfolio system integrations**: OMS/PMS data feeds
+- **Teams/Slack notifications**: Beyond email digest
+- **Version history**: Thesis edit history with diff view
+- **Sentiment scoring**: Quantitative thesis health metrics
+
+---
+
+*Phase 3 last updated: 2026-04-26 — Sprint 10 complete*
 
 *Phase 2 last updated: 2026-04-16*
