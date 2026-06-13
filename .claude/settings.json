@@ -2,6 +2,19 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/install_deps.sh"
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "product-management@knowledge-work-plugins": true,
     "engineering@knowledge-work-plugins": true,
