@@ -62,29 +62,6 @@ export function deleteHolding(id: string): Promise<void> {
 
 // Thesis types
 
-export interface ThesisPillar {
-  id: string;
-  thesisId: string;
-  title: string;
-  body: string | null;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Valuation {
-  methodology: string;
-  currentPrice: number | null;
-  upsideCase: string | null;
-  baseCase: string | null;
-  downsideCase: string | null;
-}
-
-export interface Risk {
-  description: string;
-  severity: "high" | "medium" | "low";
-}
-
 export interface Source {
   title: string;
   url: string | null;
@@ -94,23 +71,14 @@ export interface Source {
 export interface Thesis {
   id: string;
   holdingId: string;
-  summary: string | null;
-  qualityAssess: string | null;
-  valuation: Valuation | null;
-  assumptions: string[] | null;
-  risks: Risk[] | null;
+  content: string | null;
   sources: Source[] | null;
   createdAt: string;
   updatedAt: string;
-  pillars: ThesisPillar[];
 }
 
 export interface ThesisUpdateInput {
-  summary?: string;
-  qualityAssess?: string;
-  valuation?: Valuation;
-  assumptions?: string[];
-  risks?: Risk[];
+  content?: string;
 }
 
 export interface Document {
@@ -187,53 +155,7 @@ export function updateThesis(
   });
 }
 
-export function createPillar(
-  thesisId: string,
-  data: { title: string; body?: string },
-): Promise<ThesisPillar> {
-  return apiFetch(`/api/theses/${thesisId}/pillars`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-}
-
-export function updatePillar(
-  thesisId: string,
-  pillarId: string,
-  data: { title?: string; body?: string },
-): Promise<ThesisPillar> {
-  return apiFetch(`/api/theses/${thesisId}/pillars/${pillarId}`, {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  });
-}
-
-export function deletePillar(
-  thesisId: string,
-  pillarId: string,
-): Promise<void> {
-  return apiFetch(`/api/theses/${thesisId}/pillars/${pillarId}`, {
-    method: "DELETE",
-  });
-}
-
-export function reorderPillars(
-  thesisId: string,
-  pillarIds: string[],
-): Promise<ThesisPillar[]> {
-  return apiFetch(`/api/theses/${thesisId}/pillars/reorder`, {
-    method: "PATCH",
-    body: JSON.stringify({ pillarIds }),
-  });
-}
-
 // Weekly logs
-
-export interface PillarRef {
-  pillarId: string;
-  pillarTitle: string;
-  impact: "strengthened" | "weakened" | "unchanged";
-}
 
 export interface WeeklyLog {
   id: string;
@@ -245,7 +167,6 @@ export interface WeeklyLog {
   relativePerf: string | null;
   thesisImpact: "strengthened" | "weakened" | "unchanged" | null;
   summary: string | null;
-  pillarRefs: PillarRef[] | null;
   sources: unknown;
   createdAt: string;
 }

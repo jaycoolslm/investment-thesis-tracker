@@ -1,14 +1,10 @@
 import { useEffect } from "react";
 import { useParams } from "react-router";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useThesis, useHolding } from "../hooks/useThesis.ts";
 import { useWeeklyLogs } from "../hooks/useWeeklyLogs.ts";
-import type {
-  Valuation,
-  Risk,
-  Source,
-  WeeklyLog,
-  PillarRef,
-} from "../api/client.ts";
+import type { Source, WeeklyLog } from "../api/client.ts";
 
 const sourceTypeLabels: Record<string, string> = {
   web: "Web",
@@ -54,19 +50,6 @@ function Section({
   );
 }
 
-// Narrative HTML fields come from Tiptap and are safe, app-authored content.
-function Prose({ html }: { html: string | null }) {
-  if (!html || html.trim() === "") {
-    return <p className="text-sm text-brand-400">—</p>;
-  }
-  return (
-    <div
-      className="prose-print text-sm text-brand-800 leading-relaxed"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
-}
-
 export function ThesisPrintPage() {
   const { holdingId } = useParams();
   const { data: thesis, isLoading: thesisLoading } = useThesis(holdingId!);
@@ -100,32 +83,12 @@ export function ThesisPrintPage() {
     );
   }
 
-  const valuation = thesis.valuation as Valuation | null;
-  const assumptions = (thesis.assumptions as string[] | null) ?? [];
-  const risks = (thesis.risks as Risk[] | null) ?? [];
   const sources = ((thesis.sources as Source[] | null) ?? []).filter(
     (s) => s.type !== "broker_research",
   );
   const logs = weeklyLogs ?? [];
   const benchmark = holding?.benchmark ?? "S&P 500";
-
-  const valuationRows: Array<[string, string | null]> = valuation
-    ? [
-        ["Methodology", valuation.methodology],
-        [
-          "Current price",
-          valuation.currentPrice != null
-            ? valuation.currentPrice.toLocaleString("en-US", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })
-            : null,
-        ],
-        ["Upside case", valuation.upsideCase],
-        ["Base case", valuation.baseCase],
-        ["Downside case", valuation.downsideCase],
-      ]
-    : [];
+  const content = thesis.content ?? "";
 
   return (
     <div className="print-root mx-auto max-w-3xl p-8 bg-white text-brand-900">
@@ -162,84 +125,13 @@ export function ThesisPrintPage() {
         </div>
       </header>
 
-      <Section title="Summary">
-        <Prose html={thesis.summary} />
-      </Section>
-
-      <Section title="Thesis Pillars">
-        {thesis.pillars.length === 0 ? (
-          <p className="text-sm text-brand-400">No pillars recorded.</p>
+      <Section title="Thesis">
+        {content.trim() === "" ? (
+          <p className="text-sm text-brand-400">No thesis content recorded.</p>
         ) : (
-          <div className="space-y-4">
-            {thesis.pillars.map((pillar) => (
-              <div key={pillar.id} className="print-avoid-break">
-                <h3 className="text-sm font-semibold text-brand-900 mb-1">
-                  {pillar.title}
-                </h3>
-                <Prose html={pillar.body} />
-              </div>
-            ))}
+          <div className="markdown-body text-sm text-brand-800 leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           </div>
-        )}
-      </Section>
-
-      <Section title="Quality Assessment">
-        <Prose html={thesis.qualityAssess} />
-      </Section>
-
-      <Section title="Valuation">
-        {valuationRows.length === 0 ? (
-          <p className="text-sm text-brand-400">No valuation recorded.</p>
-        ) : (
-          <dl className="text-sm">
-            {valuationRows.map(([key, value]) =>
-              value ? (
-                <div
-                  key={key}
-                  className="flex gap-3 py-1 border-b border-brand-100 print-avoid-break"
-                >
-                  <dt className="w-32 shrink-0 font-medium text-brand-500">
-                    {key}
-                  </dt>
-                  <dd className="text-brand-800">{value}</dd>
-                </div>
-              ) : null,
-            )}
-          </dl>
-        )}
-      </Section>
-
-      <Section title="Assumptions">
-        {assumptions.length === 0 ? (
-          <p className="text-sm text-brand-400">No assumptions recorded.</p>
-        ) : (
-          <ul className="list-disc pl-5 text-sm text-brand-800 space-y-1">
-            {assumptions.map((item, i) => (
-              <li key={i} className="print-avoid-break">
-                {item}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      <Section title="Risks">
-        {risks.length === 0 ? (
-          <p className="text-sm text-brand-400">No risks recorded.</p>
-        ) : (
-          <ul className="text-sm text-brand-800 space-y-2">
-            {risks.map((risk, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-2 print-avoid-break"
-              >
-                <span className="shrink-0 mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold uppercase border border-brand-400 text-brand-700">
-                  {risk.severity}
-                </span>
-                <span>{risk.description}</span>
-              </li>
-            ))}
-          </ul>
         )}
       </Section>
 
@@ -289,44 +181,29 @@ export function ThesisPrintPage() {
               </tr>
             </thead>
             <tbody>
-              {logs.map((log: WeeklyLog) => {
-                const pillars = log.pillarRefs as PillarRef[] | null;
-                return (
-                  <tr
-                    key={log.id}
-                    className="border-b border-brand-100 align-top print-avoid-break"
-                  >
-                    <td className="py-1.5 pr-3">{log.weekLabel ?? "—"}</td>
-                    <td className="py-1.5 pr-3 font-mono">
-                      {formatPct(log.priceChangePct)}
-                    </td>
-                    <td className="py-1.5 pr-3 font-mono">
-                      {formatPct(log.indexChangePct)}
-                    </td>
-                    <td className="py-1.5 pr-3 font-mono">
-                      {formatPct(log.relativePerf)}
-                    </td>
-                    <td className="py-1.5 pr-3">
-                      {impactLabel(log.thesisImpact)}
-                    </td>
-                    <td className="py-1.5 text-brand-700">
-                      {log.summary ?? "—"}
-                      {pillars && pillars.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {pillars.map((p) => (
-                            <span
-                              key={p.pillarId}
-                              className="text-[11px] border border-brand-300 px-1 py-0.5 rounded"
-                            >
-                              {p.pillarTitle}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              {logs.map((log: WeeklyLog) => (
+                <tr
+                  key={log.id}
+                  className="border-b border-brand-100 align-top print-avoid-break"
+                >
+                  <td className="py-1.5 pr-3">{log.weekLabel ?? "—"}</td>
+                  <td className="py-1.5 pr-3 font-mono">
+                    {formatPct(log.priceChangePct)}
+                  </td>
+                  <td className="py-1.5 pr-3 font-mono">
+                    {formatPct(log.indexChangePct)}
+                  </td>
+                  <td className="py-1.5 pr-3 font-mono">
+                    {formatPct(log.relativePerf)}
+                  </td>
+                  <td className="py-1.5 pr-3">
+                    {impactLabel(log.thesisImpact)}
+                  </td>
+                  <td className="py-1.5 text-brand-700">
+                    {log.summary ?? "—"}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}

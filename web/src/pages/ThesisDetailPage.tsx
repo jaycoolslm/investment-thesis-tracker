@@ -5,19 +5,14 @@ import clsx from "clsx";
 import { useThesis, useHolding } from "../hooks/useThesis.ts";
 import { DirectionBadge } from "../components/DirectionBadge.tsx";
 import { LoadingSkeleton } from "../components/LoadingSkeleton.tsx";
-import { SummaryEditor } from "../components/thesis/SummaryEditor.tsx";
-import { PillarEditor } from "../components/thesis/PillarEditor.tsx";
-import { QualityEditor } from "../components/thesis/QualityEditor.tsx";
-import { ValuationEditor } from "../components/thesis/ValuationEditor.tsx";
-import { AssumptionsEditor } from "../components/thesis/AssumptionsEditor.tsx";
-import { RisksEditor } from "../components/thesis/RisksEditor.tsx";
+import { ThesisContentEditor } from "../components/thesis/ThesisContentEditor.tsx";
 import { SourcesList } from "../components/thesis/SourcesList.tsx";
 import { BrokerResearchPanel } from "../components/thesis/BrokerResearchPanel.tsx";
 import { BenchmarkEditor } from "../components/thesis/BenchmarkEditor.tsx";
 import { StatusEditor } from "../components/thesis/StatusEditor.tsx";
 import { WeeklyLogTable } from "../components/thesis/WeeklyLogTable.tsx";
 import { useWeeklyLogs } from "../hooks/useWeeklyLogs.ts";
-import type { Valuation, Risk, Source } from "../api/client.ts";
+import type { Source } from "../api/client.ts";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -29,10 +24,7 @@ function formatDate(dateStr: string): string {
 
 function buildTabs(logCount: number) {
   return [
-    { value: "summary", label: "Summary & Pillars" },
-    { value: "quality", label: "Quality & Valuation" },
-    { value: "risks", label: "Assumptions & Risks" },
-    { value: "sources", label: "Sources" },
+    { value: "thesis", label: "Thesis" },
     {
       value: "log",
       label: logCount > 0 ? `Weekly Log (${logCount})` : "Weekly Log",
@@ -146,7 +138,7 @@ export function ThesisDetailPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs.Root defaultValue="summary">
+      <Tabs.Root defaultValue="thesis">
         <Tabs.List className="flex border-b border-brand-200 mb-6" aria-label="Thesis sections">
           {buildTabs(logCount).map((tab) => (
             <Tabs.Trigger
@@ -165,33 +157,14 @@ export function ThesisDetailPage() {
           ))}
         </Tabs.List>
 
-        <Tabs.Content value="summary">
-          <SummaryEditor thesisId={thesis.id} initialValue={thesis.summary} />
-          <PillarEditor thesisId={thesis.id} pillars={thesis.pillars} />
-        </Tabs.Content>
-
-        <Tabs.Content value="quality">
-          <QualityEditor thesisId={thesis.id} initialValue={thesis.qualityAssess} />
-          <ValuationEditor
-            thesisId={thesis.id}
-            initialValue={thesis.valuation as Valuation | null}
-          />
-        </Tabs.Content>
-
-        <Tabs.Content value="risks">
-          <AssumptionsEditor
-            thesisId={thesis.id}
-            initialAssumptions={(thesis.assumptions as string[]) ?? []}
-          />
-          <RisksEditor
-            thesisId={thesis.id}
-            initialRisks={(thesis.risks as Risk[]) ?? []}
-          />
-        </Tabs.Content>
-
-        <Tabs.Content value="sources">
-          <SourcesList sources={(thesis.sources as Source[]) ?? []} />
-          <BrokerResearchPanel holdingId={holdingId!} />
+        <Tabs.Content value="thesis">
+          <ThesisContentEditor thesisId={thesis.id} initialValue={thesis.content} />
+          <div className="mt-8">
+            <SourcesList sources={(thesis.sources as Source[]) ?? []} />
+          </div>
+          <div className="mt-8">
+            <BrokerResearchPanel holdingId={holdingId!} />
+          </div>
         </Tabs.Content>
 
         <Tabs.Content value="log">
