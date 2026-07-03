@@ -1,0 +1,128 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter, Routes, Route } from "react-router";
+import { ThesisPrintPage } from "../ThesisPrintPage.tsx";
+import type { Thesis, Holding, WeeklyLog } from "../../api/client.ts";
+
+// window.print is not implemented in jsdom
+const printSpy = vi.fn();
+vi.stubGlobal("print", printSpy);
+
+let thesisData: Thesis | undefined;
+let holdingData: Holding | undefined;
+let logsData: WeeklyLog[];
+let loading = false;
+
+vi.mock("../../hooks/useThesis.ts", () => ({
+  useThesis: () => ({ data: thesisData, isLoading: loading }),
+  useHolding: () => ({ data: holdingData, isLoading: loading }),
+}));
+
+vi.mock("../../hooks/useWeeklyLogs.ts", () => ({
+  useWeeklyLogs: () => ({ data: logsData, isLoading: loading }),
+}));
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={["/holdings/h-1/print"]}>
+      <Routes>
+        <Route path="holdings/:holdingId/print" element={<ThesisPrintPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+const holding: Holding = {
+  id: "h-1",
+  ticker: "AAPL",
+  companyName: "Apple Inc.",
+  direction: "long",
+  benchmark: "S&P 500",
+  status: "active",
+  latestImpact: null,
+  lastUpdated: null,
+  createdAt: "2026-04-01T00:00:00Z",
+};
+
+const thesis: Thesis = {
+  id: "t-1",
+  holdingId: "h-1",
+  summary: "<p>Strong compounder.</p>",
+  qualityAssess: "<p>High quality franchise.</p>",
+  valuation: {
+    methodology: "DCF",
+    currentPrice: 190.5,
+    upsideCase: "$250",
+    baseCase: "$210",
+    downsideCase: "$150",
+  },
+  assumptions: ["Services keeps growing"],
+  risks: [{ description: "Regulatory pressure", severity: "medium" }],
+  sources: [{ title: "Q1 filing", url: "https://ex.com", type: "filing" }],
+  createdAt: "2026-04-02T00:00:00Z",
+  updatedAt: "2026-04-02T00:00:00Z",
+  pillars: [
+    { id: "p-1", thesisId: "t-1", title: "Ecosystem lock-in", body: "<p>Sticky.</p>", sortOrder: 0, createdAt: "", updatedAt: "" },
+  ],
+};
+
+const log: WeeklyLog = {
+  id: "log-1",
+  holdingId: "h-1",
+  weekLabel: "2026-W16",
+  weekDate: "2026-04-13",
+  priceChangePct: "3.20",
+  indexChangePct: "1.10",
+  relativePerf: "2.10",
+  thesisImpact: "strengthened",
+  summary: "Earnings beat.",
+  pillarRefs: null,
+  sources: null,
+  createdAt: "2026-04-17T00:00:00Z",
+};
+
+beforeEach(() => {
+  printSpy.mockClear();
+  loading = false;
+  thesisData = thesis;
+  holdingData = holding;
+  logsData = [log];
+});
+
+describe("ThesisPrintPage", () => {
+  it("renders every main section from mocked query data", () => {
+    renderPage();
+
+    const heading = (name: string) =>
+      screen.getByRole("heading", { name });
+    expect(heading("AAPL")).toBeInTheDocument();
+    expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+    expect(heading("Summary")).toBeInTheDocument();
+    expect(heading("Thesis Pillars")).toBeInTheDocument();
+    expect(screen.getByText("Ecosystem lock-in")).toBeInTheDocument();
+    expect(heading("Quality Assessment")).toBeInTheDocument();
+    expect(heading("Valuation")).toBeInTheDocument();
+    expect(heading("Assumptions")).toBeInTheDocument();
+    expect(screen.getByText("Services keeps growing")).toBeInTheDocument();
+    expect(heading("Risks")).toBeInTheDocument();
+    expect(screen.getByText("Regulatory pressure")).toBeInTheDocument();
+    expect(heading("Sources")).toBeInTheDocument();
+    expect(screen.getByText("Q1 filing")).toBeInTheDocument();
+    expect(heading("Weekly Log")).toBeInTheDocument();
+    expect(screen.getByText("Earnings beat.")).toBeInTheDocument();
+  });
+
+  it("calls window.print once data has loaded", () => {
+    renderPage();
+    expect(printSpy).toHaveBeenCalled();
+  });
+
+  it("shows a no-thesis message rather than crashing when there is no thesis", () => {
+    thesisData = undefined;
+    renderPage();
+    expect(
+      screen.getByText(/No thesis exists for this holding yet/i),
+    ).toBeInTheDocument();
+    expect(printSpy).not.toHaveBeenCalled();
+  });
+});
