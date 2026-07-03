@@ -52,7 +52,7 @@ pnpm test:e2e             # 9 Playwright E2E tests (needs Docker + dev servers)
 
 ## Running production-like locally
 
-A single image serves the React bundle + API + the PDF export route on port 3001.
+A single image serves the React bundle + API on port 3001.
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
