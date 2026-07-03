@@ -19,9 +19,9 @@ export function buildGenerationPrompt(input: GenerationInput): string {
 
   const positionType = direction === "long" ? "LONG (bullish)" : "SHORT (bearish)";
 
-  let prompt = `You are an investment research analyst generating a structured thesis document.
+  let prompt = `You are an investment research analyst writing a thesis document.
 
-TASK: Generate an investment thesis for ${companyName} (${ticker}).
+TASK: Write an investment thesis for ${companyName} (${ticker}).
 POSITION: ${positionType}
 BENCHMARK: ${benchmarkIndex}
 
@@ -36,20 +36,23 @@ INSTRUCTIONS:
    - Competitive landscape and sector trends
    - Current stock price and valuation metrics
 
-2. Using the analyst's arguments above and your web research, generate a comprehensive investment thesis.
+2. Using the analyst's arguments above and your web research, write a comprehensive
+   investment thesis as a well-structured **Markdown document** in the "content" field.
 
-3. The thesis must include:
-   - A 2-3 paragraph summary that reads like an elevator pitch
-   - 2-5 thesis pillars (discrete, falsifiable arguments with supporting evidence)
-   - A quality assessment covering financial strength, competitive position, and ESG
-   - Valuation analysis with upside/base/downside scenarios
-   - Key assumptions (measurable conditions the thesis depends on)
-   - Specific risks with severity ratings (high/medium/low)
-   - All sources cited
+3. Shape the document to the situation. A strong thesis usually covers (use markdown
+   "##" headings; adapt, add, or drop sections as the case warrants):
+   - Summary — a 2-3 paragraph elevator pitch
+   - Thesis Pillars — the discrete, falsifiable arguments with supporting evidence
+   - Quality Assessment — financial strength, competitive position, ESG
+   - Valuation — methodology and upside/base/downside scenarios
+   - Key Assumptions — the measurable conditions the thesis depends on
+   - Risks — specific risks, each labelled High / Medium / Low
 
-4. Be specific, not generic. Every pillar, assumption, and risk should be specific to ${companyName}, not applicable to any company in the sector.
+4. Be specific, not generic. Every argument, assumption, and risk should be specific
+   to ${companyName}, not applicable to any company in the sector.
 
-5. Every financial metric must have a source. Do not hallucinate numbers.`;
+5. Every financial metric must have a source. Do not hallucinate numbers. Populate the
+   "sources" field with everything you cite.`;
 
   if (researchFilePaths.length > 0) {
     prompt += `
@@ -57,7 +60,7 @@ INSTRUCTIONS:
 BROKER RESEARCH FILES (read these for additional context):
 ${researchFilePaths.map((p) => `- ${p}`).join("\n")}
 
-Incorporate relevant insights from these documents into the thesis. Cite them in the sources section.`;
+Incorporate relevant insights from these documents into the thesis. Cite them in the sources.`;
   }
 
   return prompt;
@@ -70,10 +73,7 @@ export interface WeeklyAnalysisInput {
   companyName: string;
   direction: "long" | "short";
   benchmarkIndex: string;
-  thesisSummary: string;
-  pillars: Array<{ id: string; title: string; body: string | null }>;
-  assumptions: string[];
-  risks: Array<{ description: string; severity: string }>;
+  thesisContent: string;
   researchFilePaths: string[];
   priceData: {
     priceChangePct: number | null;
@@ -90,10 +90,7 @@ export function buildWeeklyPrompt(input: WeeklyAnalysisInput): string {
     companyName,
     direction,
     benchmarkIndex,
-    thesisSummary,
-    pillars,
-    assumptions,
-    risks,
+    thesisContent,
     researchFilePaths,
     priceData,
     weekLabel,
@@ -120,21 +117,6 @@ The above price data has been verified from market data feeds. Use these exact f
     priceSection = `PRICE DATA: Unavailable for this week. Set priceChangePct, indexChangePct, and relativePerf to null in your output. Focus on qualitative analysis from news and research.`;
   }
 
-  const pillarList = pillars
-    .map(
-      (p, i) =>
-        `  Pillar ${i + 1} (id: ${p.id}): "${p.title}"${p.body ? ` — ${p.body}` : ""}`,
-    )
-    .join("\n");
-
-  const assumptionList = assumptions
-    .map((a, i) => `  ${i + 1}. ${a}`)
-    .join("\n");
-
-  const riskList = risks
-    .map((r, i) => `  ${i + 1}. [${r.severity.toUpperCase()}] ${r.description}`)
-    .join("\n");
-
   let prompt = `You are an investment research analyst performing a weekly monitoring update.
 
 TASK: Analyse the past week's developments for ${companyName} (${ticker}) against the existing investment thesis.
@@ -144,26 +126,15 @@ WEEK: ${weekLabel} (week of ${weekDate})
 
 ${priceSection}
 
-EXISTING THESIS SUMMARY:
-${thesisSummary}
-
-THESIS PILLARS (assess each one individually):
-${pillarList}
-
-KEY ASSUMPTIONS (check if still intact):
-${assumptionList}
-
-KNOWN RISKS:
-${riskList}
+EXISTING THESIS (Markdown):
+${thesisContent}
 
 INSTRUCTIONS:
 1. Search the web for news and developments about ${companyName} (${ticker}) from the past week.
-2. For EACH thesis pillar listed above, assess whether this week's news strengthens, weakens, or leaves it unchanged. Cite specific evidence.
-3. For each key assumption, note whether it remains intact or has been challenged.
-4. Write a 2-3 sentence summary that references specific pillars and assumptions by name.
-5. Set thesisImpact to "strengthened", "weakened", or "unchanged" based on the overall weight of evidence across all pillars.
-6. In pillarRefs, include an entry for each pillar above with its exact pillarId and pillarTitle.
-7. Cite all sources (web articles, filings, broker research).
+2. Read the thesis above and assess whether this week's news strengthens, weakens, or leaves each part of it intact. Cite specific evidence.
+3. Write a 2-3 sentence summary that, in prose, names which parts of the thesis were affected and how.
+4. Set thesisImpact to "strengthened", "weakened", or "unchanged" based on the overall weight of evidence.
+5. Cite all sources (web articles, filings, broker research).
 
 Be specific and evidence-based. Every claim must have a source.`;
 
