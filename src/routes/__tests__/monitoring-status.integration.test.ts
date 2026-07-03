@@ -54,7 +54,7 @@ vi.mock("../../jobs/queue.js", () => ({
 // Dynamic imports after mocks
 const { createApp } = await import("../../app.js");
 const { db } = await import("../../db/index.js");
-const { holdings, theses, thesisPillars, weeklyLogs, documents } =
+const { holdings, theses, weeklyLogs, documents } =
   await import("../../db/schema.js");
 
 const app = createApp();
@@ -64,7 +64,6 @@ beforeEach(async () => {
   mockHsetnx.mockResolvedValue(1);
   await db.delete(documents);
   await db.delete(weeklyLogs);
-  await db.delete(thesisPillars);
   await db.delete(theses);
   await db.delete(holdings);
 });

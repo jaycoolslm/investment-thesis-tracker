@@ -39,13 +39,8 @@ test.describe("Thesis lifecycle", () => {
     if (rowCount > 0) {
       await rows.first().click();
 
-      // Should see thesis tabs
-      await expect(page.getByRole("tab", { name: /summary/i })).toBeVisible();
-      await expect(page.getByRole("tab", { name: /quality/i })).toBeVisible();
-      await expect(
-        page.getByRole("tab", { name: /assumptions/i }),
-      ).toBeVisible();
-      await expect(page.getByRole("tab", { name: /sources/i })).toBeVisible();
+      // Should see the two thesis tabs
+      await expect(page.getByRole("tab", { name: /thesis/i })).toBeVisible();
       await expect(
         page.getByRole("tab", { name: /weekly log/i }),
       ).toBeVisible();

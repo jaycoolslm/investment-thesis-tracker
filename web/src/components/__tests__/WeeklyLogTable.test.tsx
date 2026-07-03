@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WeeklyLogTable } from "../thesis/WeeklyLogTable.tsx";
@@ -32,7 +32,6 @@ function createLog(overrides: Partial<WeeklyLog> = {}): WeeklyLog {
     relativePerf: "2.10",
     thesisImpact: "strengthened",
     summary: "Strong earnings beat expectations.",
-    pillarRefs: null,
     sources: null,
     createdAt: "2026-04-17T00:00:00Z",
     ...overrides,
@@ -176,29 +175,5 @@ describe("WeeklyLogTable", () => {
     // Price formatting (+/- with %)
     expect(screen.getByText("+3.20%")).toBeInTheDocument();
     expect(screen.getByText("-2.50%")).toBeInTheDocument();
-  });
-
-  it("renders pillar ref badges in summary column", () => {
-    const logs = [
-      createLog({
-        pillarRefs: [
-          {
-            pillarId: "p1",
-            pillarTitle: "Services Revenue Flywheel",
-            impact: "strengthened",
-          },
-          {
-            pillarId: "p2",
-            pillarTitle: "Pricing Power",
-            impact: "unchanged",
-          },
-        ],
-      }),
-    ];
-
-    renderTable({ logs });
-
-    expect(screen.getByText("Services Revenue Flywheel")).toBeInTheDocument();
-    expect(screen.getByText("Pricing Power")).toBeInTheDocument();
   });
 });

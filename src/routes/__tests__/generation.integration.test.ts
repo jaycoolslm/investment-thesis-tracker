@@ -16,21 +16,18 @@ vi.mock("../../agent/codex-agent.js", () => ({
 // Dynamic imports after mocks
 const { createApp } = await import("../../app.js");
 const { db } = await import("../../db/index.js");
-const { holdings, theses, thesisPillars } = await import(
-  "../../db/schema.js"
-);
+const { holdings, theses } = await import("../../db/schema.js");
 
 const app = createApp();
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  await db.delete(thesisPillars);
   await db.delete(theses);
   await db.delete(holdings);
 });
 
 describe("Thesis generation (integration)", () => {
-  it("POST /api/holdings/:id/generate persists thesis + pillars", async () => {
+  it("POST /api/holdings/:id/generate persists markdown thesis", async () => {
     // Create a holding
     const { body: holding } = await request(app)
       .post("/api/holdings")
@@ -50,9 +47,9 @@ describe("Thesis generation (integration)", () => {
       `/api/holdings/${holding.id}/thesis`,
     );
     expect(thesisRes.status).toBe(200);
-    expect(thesisRes.body.summary).toBe(VALID_THESIS_FIXTURE.summary);
-    expect(thesisRes.body.pillars).toHaveLength(
-      VALID_THESIS_FIXTURE.pillars.length,
+    expect(thesisRes.body.content).toBe(VALID_THESIS_FIXTURE.content);
+    expect(thesisRes.body.sources).toHaveLength(
+      VALID_THESIS_FIXTURE.sources.length,
     );
   });
 

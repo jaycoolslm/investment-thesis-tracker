@@ -4,7 +4,9 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Phase 3 in progress (Sprint 10 done). Phase 2 complete (Sprints 6-9). Phase 1 shipped (Sprints 1-5). Sprint 10 (PDF export) — reworked to a browser print view (no server-side PDF rendering): "Export PDF" opens `/holdings/:id/print` in a new tab, a chrome-free single-scroll render of the whole thesis (header → summary → pillars → quality → valuation → assumptions → risks → sources → weekly log). `ThesisPrintPage` reuses the `useThesis`/`useHolding`/`useWeeklyLogs` hooks, calls `window.print()` on mount (Save as PDF) and shows a visible "Print / Save as PDF" button. Print pagination lives in an `@media print` block + `@page` margins in `web/src/globals.css` (`break-inside: avoid` on sections/rows, weekly-log `thead` set to `table-header-group` so headers repeat across pages — the weekly log uses a real `<table>`, and status/severity labels are monochrome-safe text). A holding without a thesis shows a "no thesis yet" message. This removed the server-side PDF-rendering path entirely: deleted `src/pdf/`, `src/services/pdf-export.tsx`, the `GET /api/holdings/:id/export/pdf` route and its integration tests; dropped the backend `react`/`react-dom` and the react PDF renderer package deps and the `jsx`/`jsxImportSource` compiler options from the backend `tsconfig.json` (backend has no TSX anymore). 42 integration tests (-4), 78 unit tests, 25 frontend tests (+3 — `ThesisPrintPage`) — all green. Sprint 9 (test hardening) still authoritative for prior state: fixed Vitest 4 `fileParallelism` issue (deprecated `poolOptions.forks.singleFork` was silently ignored, causing parallel test files to race on shared DB); `MOCK_AGENT=true` env var flips `ThesisAgent` and `MarketDataService` to fixtures for E2E/demo; coverage audit in `TEST-GAPS.md` still flags bulk routes (11%), file-parser (2%), document routes (18%) as the next priorities. Shared test helpers: `src/__tests__/helpers.ts` (`seedHolding`, `seedHoldingWithThesis`, `seedManyHoldings`, `cleanAllTables`). Note: `modelReasoningEffort` still `"low"` for dev (TODO: bump to high for production).
+Phase 3 in progress. A simplification programme is under way (spec 02 done): **the thesis is now a single Markdown document**. The old structured encoding — `thesis_pillars` table, `summary`/`quality_assess`/`valuation`/`assumptions`/`risks` columns, the strict multi-field AI output schema, ~200 lines of pillar CRUD, and the seven per-section frontend editors across five tabs — collapsed into one `theses.content` markdown column. `sources` stays structured (weekly monitoring appends to it; the UI lists it separately). The agent now writes a free-form Markdown thesis (`thesisOutputSchema = { content: string≥200, sources }`); migration `0002_markdown_thesis.sql` backfills `content` for any pre-existing thesis (composes `## Summary` / `## Thesis Pillars` / `## Quality Assessment` / `## Valuation` / `## Key Assumptions` / `## Risks` from the old columns, stripping Tiptap HTML) before dropping them and `weekly_logs.pillar_refs`. Frontend: the five tabs collapse to **Thesis | Weekly Log**; the Thesis tab renders `content` with `react-markdown` + `remark-gfm` and an Edit toggle that swaps in a full-height monospace `<textarea>` on the existing debounced `useAutoSave`, followed by the Sources list and `BrokerResearchPanel` (with `BenchmarkEditor` / `StatusEditor` in the header). `ThesisPrintPage` renders the markdown + sources + weekly log. Deleted the per-section editors (`PillarEditor`, `PillarCard`, `SummaryEditor`, `QualityEditor`, `ValuationEditor`, `AssumptionsEditor`, `RisksEditor`), `SeverityBadge`, and all pillar API/mutations. (Tiptap / `EditableText` remain in the repo but are now unused by the thesis view — spec 03 sweeps rich-text.) 40 integration tests, 68 unit tests, 28 frontend tests — all green.
+
+Prior state (spec 01 — PDF export via browser print view): "Export PDF" opens `/holdings/:id/print` in a new tab, a chrome-free single-scroll render; `ThesisPrintPage` reuses `useThesis`/`useHolding`/`useWeeklyLogs`, calls `window.print()` on mount and shows a visible "Print / Save as PDF" button. Print pagination lives in an `@media print` block + `@page` margins in `web/src/globals.css` (`break-inside: avoid` on sections/rows, weekly-log `thead` set to `table-header-group`). No server-side PDF rendering. `MOCK_AGENT=true` env var flips `ThesisAgent` and `MarketDataService` to fixtures for E2E/demo. Shared test helpers: `src/__tests__/helpers.ts` (`seedHolding`, `seedHoldingWithThesis`, `seedManyHoldings`, `cleanAllTables`). Note: `modelReasoningEffort` still `"low"` for dev (TODO: bump to high for production).
 
 ## Key Documents
 
@@ -22,7 +24,7 @@ Read these before making architectural or UX decisions:
 ## Tech Stack
 
 - **Backend**: Express 5 + TypeScript 6 on Node.js 20 LTS (Docker) / Node 24 (local)
-- **Frontend**: React 19 + Vite 8 + TanStack Table + TanStack Query + Tailwind CSS v4 + Radix UI + Tiptap
+- **Frontend**: React 19 + Vite 8 + TanStack Table + TanStack Query + Tailwind CSS v4 + Radix UI + react-markdown/remark-gfm (thesis rendering) + Tiptap (legacy `EditableText`, unused by the thesis view — pending removal in spec 03)
 - **Database**: PostgreSQL 16 + Drizzle ORM 0.45 (pg driver)
 - **Validation**: Zod v4 (env config, API input, AI output)
 - **Jobs**: BullMQ + Redis (bulk-generation: concurrency 3, 2 retries; weekly-monitoring: concurrency 10, 3 retries)
@@ -39,8 +41,8 @@ Read these before making architectural or UX decisions:
 1. **The Codex agent does the heavy lifting.** Web search, file reading (broker research PDFs), financial analysis — all handled natively by the agent. No vector store, no document parsing pipeline, no search provider abstraction.
 2. **Broker research = save file, pass path to agent.** PDFs/DOCX saved to `/data/documents/{holdingId}/`. The agent reads them directly via its built-in PDF skill.
 3. **No provider abstraction in v1.** A thin `ThesisAgent` wrapper class isolates the SDK from business logic. That's enough. Extract an interface when a second provider is actually needed.
-4. **Thesis pillars are first-class DB rows** (not JSONB) so weekly logs can reference them by ID.
-5. **Weekly logs are append-only.** `pillar_refs` is JSONB — a snapshot of which pillars were impacted.
+4. **The thesis is a single Markdown document** (`theses.content`). The agent writes it freely, the manager edits it as raw markdown, and it renders with `react-markdown`. There is no structured pillar/valuation/risk schema — only `content` + a structured `sources` list.
+5. **Weekly logs are append-only structured rows.** They reference the thesis *in prose* (the AI summary names the parts affected); there is no pillar-reference column.
 6. **Generation progress uses `runStreamed()`.** Real SDK events (web searches, agent_message start) are forwarded via SSE to the frontend. The Codex exec JSONL stream does NOT emit reasoning items — the `ReasoningItem` type exists in the SDK but is never sent. Don't attempt `model_reasoning_summary` config; it has no effect in exec mode.
 7. **`@openai/codex` must be a direct dependency** (not just transitive via `@openai/codex-sdk`). pnpm's strict hoisting prevents the SDK's `require.resolve()` chain from finding the platform-specific binary otherwise. This affects Docker builds.
 
@@ -60,9 +62,9 @@ Note: Redis is mapped to host port 6380 (not 6379) to avoid conflicts with other
 ## Running Tests
 
 ```bash
-pnpm test                      # Backend unit tests (78 tests, no Docker needed)
-pnpm test:integration          # Backend integration tests (42 tests, needs Docker for Testcontainers)
-cd web && pnpm test            # Frontend component tests (25 tests, no Docker needed)
+pnpm test                      # Backend unit tests (68 tests, no Docker needed)
+pnpm test:integration          # Backend integration tests (40 tests, needs Docker for Testcontainers)
+cd web && pnpm test            # Frontend component tests (28 tests, no Docker needed)
 pnpm test:e2e                  # E2E Playwright tests (9 tests, needs Docker + dev servers)
 ```
 
@@ -92,14 +94,14 @@ thesis-tracking/
     routes/
       holdings.ts              — Holdings CRUD (GET/POST/PUT/DELETE)
       generation.ts            — POST /api/holdings/:id/generate + GET /api/holdings/:id/progress (SSE)
-      theses.ts                — GET thesis + PATCH thesis + pillar CRUD + reorder
+      theses.ts                — GET thesis + PATCH thesis content (weekly-logs endpoints live here too)
       documents.ts             — POST/GET/DELETE /api/holdings/:id/documents
       bulk.ts                  — Bulk upload: parse/preview, start, SSE progress, cancel, retry, template
       monitoring.ts            — Batch monitoring: POST trigger, GET status, GET progress (SSE), GET history
     agent/
       codex-agent.ts           — ThesisAgent: generateThesis() + analyseWeekly() wrapping @openai/codex-sdk
       prompts.ts               — buildGenerationPrompt() + buildWeeklyPrompt() + input interfaces
-      schemas.ts               — Zod schemas for AI output (thesis, weekly log, pillars, risks, etc.)
+      schemas.ts               — Zod schemas for AI output (markdown thesis { content, sources }, weekly log, source)
     services/
       thesis-generation.ts     — Orchestrates: validate → agent call → persist in transaction
       weekly-monitoring.ts     — Weekly monitoring: market data → agent analysis → persist log + update holding + getCurrentWeek() export
@@ -118,7 +120,7 @@ thesis-tracking/
       setup-integration.ts     — Global setup: Testcontainers (Postgres 16 + Redis 7), migration runner
       helpers.ts               — Shared test helpers: seedHolding, seedHoldingWithThesis, seedManyHoldings, cleanAllTables
     db/
-      schema.ts                — 5 tables + 3 enums + relations
+      schema.ts                — 4 tables (holdings, theses, weekly_logs, documents) + 3 enums + relations
       index.ts                 — Drizzle client
       seed.ts                  — Idempotent seed (3 holdings)
       migrations/              — Drizzle-generated SQL
@@ -134,7 +136,7 @@ thesis-tracking/
       globals.css              — Tailwind v4 @theme tokens (brand, accent, status colours) + @media print / @page rules for the print view
       pages/
         Dashboard.tsx           — Holdings list with search, filter chips, loading/empty/error states
-        ThesisDetailPage.tsx    — Thesis view: header, 5-tab Radix Tabs, all editors
+        ThesisDetailPage.tsx    — Thesis view: header + 2-tab Radix Tabs (Thesis | Weekly Log)
         ThesisPrintPage.tsx     — Chrome-free single-scroll print/export view; auto-calls window.print() on load
       components/
         Layout.tsx              — Shared header + Outlet + modals + toasts + bulk + monitoring state management
@@ -150,22 +152,15 @@ thesis-tracking/
         MonitoringHistory.tsx    — Past monitoring batch runs table (week, counts, impact breakdown)
         ErrorFallback.tsx       — React error boundary fallback UI
         FileDropZone.tsx        — Configurable drag-and-drop upload zone (PDF/DOCX or XLSX/CSV)
-        EditableText.tsx        — Click-to-edit: Tiptap (multiline) or input (singleline), auto-save
+        EditableText.tsx        — Click-to-edit Tiptap/input (legacy, unused by thesis view — pending removal in spec 03)
         ConfirmDialog.tsx       — Reusable Radix AlertDialog wrapper
-        SeverityBadge.tsx       — High/Medium/Low risk badge with editable Select
         Toast.tsx               — Toast notification container
         StatusBadge.tsx         — Strengthened/Weakened/Unchanged/Generating/New/Failed badges
         DirectionBadge.tsx      — Long/Short badges
         LoadingSkeleton.tsx     — 8-row pulsing skeleton
         EmptyState.tsx          — "No holdings yet" with Add Holding + Upload Spreadsheet buttons
         thesis/
-          SummaryEditor.tsx     — Thesis summary Tiptap editor
-          PillarEditor.tsx      — Pillar list with add/reorder
-          PillarCard.tsx        — Single pillar: title + body editing + move + delete
-          QualityEditor.tsx     — Quality assessment Tiptap editor
-          ValuationEditor.tsx   — Valuation key-value pairs
-          AssumptionsEditor.tsx — Editable assumption rows (JSONB array)
-          RisksEditor.tsx       — Risk rows with severity dropdown (JSONB array)
+          ThesisContentEditor.tsx — Renders thesis markdown (react-markdown) with an Edit toggle → textarea + autosave
           SourcesList.tsx       — Read-only web sources list
           BrokerResearchPanel.tsx — File list + upload drop zone + delete
           BenchmarkEditor.tsx   — Benchmark index Radix Select dropdown
@@ -174,7 +169,7 @@ thesis-tracking/
       hooks/
         useHoldings.ts          — TanStack Query: useHoldings, useCreateHolding, useDeleteHolding
         useThesis.ts            — useThesis + useHolding query hooks
-        useThesisMutations.ts   — updateThesis, CRUD pillars, reorder
+        useThesisMutations.ts   — updateThesis (content)
         useDocuments.ts         — useDocuments, useUploadDocument, useDeleteDocument
         useAutoSave.ts          — Debounced save with status tracking
         useGenerateThesis.ts    — Mutation: create holding → upload files
@@ -189,7 +184,7 @@ thesis-tracking/
         useMonitoringHistory.ts — TanStack Query: past batch run summaries
         useToast.ts             — Toast state management
       api/
-        client.ts               — Typed fetch: holdings, theses, pillars, documents, generation, monitoring
+        client.ts               — Typed fetch: holdings, theses (content), documents, generation, monitoring
         bulk.ts                 — Bulk API: upload, start, cancel, retry, template download
 ```
 
@@ -198,9 +193,8 @@ thesis-tracking/
 - Users are **non-technical fund managers**. UX must be dead simple.
 - No software jargon. Speak finance: "holdings", "thesis", "weekly update", "broker research".
 - Dashboard-first. One button: "Add Holding."
-- Thesis view uses **tabs** (not a long scroll): Summary+Pillars | Quality+Valuation | Assumptions+Risks | Sources | Weekly Log.
-- Structured items (pillars, assumptions, risks) use **Notion-style block editing** — discrete rows with add/remove/reorder.
-- Narrative sections use **click-to-edit** text blocks with auto-save.
+- Thesis view uses two **tabs**: Thesis | Weekly Log. The Thesis tab shows the rendered markdown document (sources + broker research below it).
+- The thesis is edited as **one markdown document** — an Edit toggle swaps the rendered view for a full-height textarea with debounced auto-save. No structured per-section editors.
 
 ## Design Tokens
 
