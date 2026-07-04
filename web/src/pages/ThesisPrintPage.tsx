@@ -6,13 +6,6 @@ import { useThesis, useHolding } from "../hooks/useThesis.ts";
 import { useWeeklyLogs } from "../hooks/useWeeklyLogs.ts";
 import type { Source, WeeklyLog } from "../api/client.ts";
 
-const sourceTypeLabels: Record<string, string> = {
-  web: "Web",
-  filing: "Filing",
-  news: "News",
-  broker_research: "Research",
-};
-
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
@@ -83,9 +76,7 @@ export function ThesisPrintPage() {
     );
   }
 
-  const sources = ((thesis.sources as Source[] | null) ?? []).filter(
-    (s) => s.type !== "broker_research",
-  );
+  const sources = (thesis.sources as Source[] | null) ?? [];
   const logs = weeklyLogs ?? [];
   const benchmark = holding?.benchmark ?? "S&P 500";
   const content = thesis.content ?? "";
@@ -142,11 +133,6 @@ export function ThesisPrintPage() {
           <ul className="text-sm space-y-1.5">
             {sources.map((source, i) => (
               <li key={i} className="flex items-center gap-2 print-avoid-break">
-                {source.type && (
-                  <span className="text-xs font-medium text-brand-500 border border-brand-300 px-1.5 py-0.5 rounded">
-                    {sourceTypeLabels[source.type] ?? source.type}
-                  </span>
-                )}
                 <span className="text-brand-800">{source.title}</span>
                 {source.url && (
                   <span className="text-brand-400 break-all">{source.url}</span>

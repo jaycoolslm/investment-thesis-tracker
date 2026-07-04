@@ -3,7 +3,6 @@ import * as z from "zod";
 export const sourceSchema = z.object({
   title: z.string().min(1),
   url: z.string().nullable(),
-  type: z.enum(["web", "broker_research", "filing", "news"]).nullable(),
 });
 
 export const thesisOutputSchema = z.object({

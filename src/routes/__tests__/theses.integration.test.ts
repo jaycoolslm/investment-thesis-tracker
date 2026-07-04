@@ -37,6 +37,8 @@ beforeEach(async () => {
     .values({
       holdingId: holding.id,
       content: INITIAL_CONTENT,
+      // Legacy stored shape: pre-spec-07 sources carried a `type` field.
+      // The API must keep serving them unchanged (read-side tolerance).
       sources: [{ title: "Q1 filing", url: null, type: "filing" }],
     })
     .returning();

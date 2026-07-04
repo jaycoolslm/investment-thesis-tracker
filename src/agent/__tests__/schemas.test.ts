@@ -9,34 +9,33 @@ import { VALID_THESIS_FIXTURE, VALID_WEEKLY_LOG_FIXTURE } from "./fixtures.js";
 describe("sourceSchema", () => {
   it("accepts a full source", () => {
     const result = sourceSchema.safeParse({
-      title: "Q1 filing",
+      title: "Q1 earnings release",
       url: "https://example.com",
-      type: "filing",
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts null url and type", () => {
+  it("accepts null url", () => {
     const result = sourceSchema.safeParse({
       title: "Analyst note",
       url: null,
-      type: null,
     });
     expect(result.success).toBe(true);
   });
 
   it("rejects empty title", () => {
-    const result = sourceSchema.safeParse({ title: "", url: null, type: null });
+    const result = sourceSchema.safeParse({ title: "", url: null });
     expect(result.success).toBe(false);
   });
 
-  it("rejects invalid type value", () => {
+  it("tolerates legacy stored sources that still carry a type field", () => {
     const result = sourceSchema.safeParse({
-      title: "X",
+      title: "Legacy source",
       url: null,
-      type: "blog",
+      type: "filing",
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ title: "Legacy source", url: null });
   });
 });
 
@@ -68,12 +67,10 @@ describe("thesisOutputSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("accepts sources with null url and type", () => {
+  it("accepts sources with null url", () => {
     const result = thesisOutputSchema.safeParse({
       ...VALID_THESIS_FIXTURE,
-      sources: [
-        { title: "Analyst report on sector trends", url: null, type: null },
-      ],
+      sources: [{ title: "Analyst report on sector trends", url: null }],
     });
     expect(result.success).toBe(true);
   });
