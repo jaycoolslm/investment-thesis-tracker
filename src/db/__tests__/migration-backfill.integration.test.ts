@@ -46,7 +46,7 @@ beforeAll(async () => {
   await applyMigration(scratch, "0000_eminent_juggernaut.sql");
   await applyMigration(scratch, "0001_robust_speed_demon.sql");
 
-  // Seed an old-shape thesis: Tiptap-HTML text fields, valuation/assumptions/
+  // Seed an old-shape thesis: legacy rich-text HTML text fields, valuation/assumptions/
   // risks JSONB, two pillars (inserted out of sort order), and a weekly log
   // row carrying pillar_refs.
   const {
@@ -114,7 +114,7 @@ afterAll(async () => {
 });
 
 describe("0002_markdown_thesis backfill", () => {
-  it("composes a Summary section with Tiptap HTML stripped", () => {
+  it("composes a Summary section with legacy HTML stripped", () => {
     expect(content).toContain("## Summary");
     expect(content).toContain("Apple is a quality compounder.");
     expect(content).toContain("Services drive the re-rating.");
