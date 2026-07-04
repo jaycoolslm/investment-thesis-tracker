@@ -2,6 +2,13 @@
 
 Generated 2026-04-17. Based on unit + integration coverage reports.
 
+> Amended 2026-07-04 (simplification spec 06): the worst gaps below are closed
+> or moot. `file-parser.ts` is now a small hand-rolled CSV parser with 21 unit
+> tests; `routes/bulk.ts` has integration tests (preview, Excel rejection,
+> start with excluded rows, template download); `template-generator.ts`,
+> `BulkValidationTable`, and the queue workers no longer exist. The tables
+> below are kept as the historical Sprint 9 snapshot.
+
 ## Current Test Counts
 
 | Layer | Files | Tests |

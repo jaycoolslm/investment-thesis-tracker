@@ -21,7 +21,7 @@ test.describe("Thesis lifecycle", () => {
     ).toBeVisible();
   });
 
-  test("empty state shows Add Holding and Upload Spreadsheet buttons", async ({
+  test("empty state shows Add Holding and Upload CSV buttons", async ({
     page,
   }) => {
     await page.goto("/");
