@@ -32,14 +32,17 @@ if command -v caffeinate >/dev/null 2>&1; then
 fi
 
 # ── Config (all overridable via env) ─────────────────────────────────────────
-MAX_PASSES="${MAX_PASSES:-4}"          # generator↔evaluator iterations cap PER SPEC
-BASE_BRANCH="${BASE_BRANCH:-main}"     # the first spec branches off this
+MAX_PASSES="${MAX_PASSES:-4}"      # generator↔evaluator iterations cap PER SPEC
+BASE_BRANCH="${BASE_BRANCH:-main}" # the first spec branches off this
 BRANCH_PREFIX="${BRANCH_PREFIX:-harness/}"
-MODEL="${MODEL:-}"                     # e.g. claude-opus-4-8 ; empty = CLI default
+GEN_MODEL="${GEN_MODEL:-fable}"  # generator: fable one-shots the builds
+EVAL_MODEL="${EVAL_MODEL:-opus}" # evaluator: cheaper quota for the long verification passes
 CONTINUE_ON_FAIL="${CONTINUE_ON_FAIL:-0}"
 PERMISSION_MODE="${PERMISSION_MODE:-auto}"
-ONLY_SPEC="${ONLY_SPEC:-}"             # run a single spec by filename, e.g. 04-remove-bullmq-redis.md
-NO_PR="${NO_PR:-0}"                    # 1 = skip push + PR creation (local branches only)
+ONLY_SPEC="${ONLY_SPEC:-}" # run a single spec by filename, e.g. 04-remove-bullmq-redis.md
+NO_PR="${NO_PR:-0}"        # 1 = skip push + PR creation (local branches only)
+STAGE_RETRIES="${STAGE_RETRIES:-4}"      # attempts per stage when `claude` exits non-zero (session limit etc.)
+STAGE_RETRY_WAIT="${STAGE_RETRY_WAIT:-3600}" # seconds between attempts (limits reset on the hour-ish)
 
 SPECS_DIR="$HARNESS_DIR/specs"
 STATE_DIR="$HARNESS_DIR/state"
@@ -47,31 +50,59 @@ FINDINGS="$HARNESS_DIR/findings.md"
 mkdir -p "$STATE_DIR"
 
 CLAUDE_FLAGS=(--permission-mode "$PERMISSION_MODE")
-[ -n "$MODEL" ] && CLAUDE_FLAGS+=(--model "$MODEL")
 
 RUN_START=$(date +%s)
 ts() { date +%H:%M:%S; }
-fmt_dur() { printf '%dm %02ds' $(( $1 / 60 )) $(( $1 % 60 )); }
+fmt_dur() { printf '%dm %02ds' $(($1 / 60)) $(($1 % 60)); }
 say() { printf '\n\033[1m[%s] === %s ===\033[0m\n' "$(ts)" "$*"; }
 warn() { printf '\033[33m[%s] WARN: %s\033[0m\n' "$(ts)" "$*"; }
 
 run_timed() {
-  local label="$1"; shift
+  local label="$1"
+  shift
   say "$label"
   local t0 rc=0
   t0=$(date +%s)
   "$@" || rc=$?
-  printf '\033[1m[%s] └─ %s took %s\033[0m\n' "$(ts)" "$label" "$(fmt_dur $(( $(date +%s) - t0 )))"
+  printf '\033[1m[%s] └─ %s took %s\033[0m\n' "$(ts)" "$label" "$(fmt_dur $(($(date +%s) - t0)))"
   return "$rc"
 }
 
-print_total() { printf '\n\033[1m[%s] total elapsed: %s\033[0m\n' "$(ts)" "$(fmt_dur $(( $(date +%s) - RUN_START )))"; }
+print_total() { printf '\n\033[1m[%s] total elapsed: %s\033[0m\n' "$(ts)" "$(fmt_dur $(($(date +%s) - RUN_START)))"; }
 trap 'print_total' EXIT
 trap 'exit 130' INT TERM
 
+# Run one claude stage, retrying on a non-zero exit (session limit, transient API
+# error) after a long sleep instead of killing the overnight run. Uses the loop
+# variable $spec for the prompt suffix. Returns non-zero only after all attempts.
+run_stage() {
+  local label="$1" model="$2" effort="$3" prompt_file="$4" attempt rc
+  for attempt in $(seq 1 "$STAGE_RETRIES"); do
+    rc=0
+    run_timed "$label" \
+      claude -p "$(cat "$prompt_file")
+
+---
+The spec for this run is: \`$spec\` — read it now." \
+      --model "$model" \
+      --effort "$effort" \
+      "${CLAUDE_FLAGS[@]}" || rc=$?
+    [ "$rc" = "0" ] && return 0
+    warn "$label exited rc=$rc (session limit or transient error?)"
+    if [ "$attempt" -lt "$STAGE_RETRIES" ]; then
+      warn "sleeping ${STAGE_RETRY_WAIT}s, then retry $((attempt + 1))/$STAGE_RETRIES"
+      sleep "$STAGE_RETRY_WAIT"
+    fi
+  done
+  return 1
+}
+
 # ── Preflight ─────────────────────────────────────────────────────────────────
-git rev-parse --verify "$BASE_BRANCH" >/dev/null 2>&1 \
-  || { echo "Base branch '$BASE_BRANCH' not found — aborting."; exit 1; }
+git rev-parse --verify "$BASE_BRANCH" >/dev/null 2>&1 ||
+  {
+    echo "Base branch '$BASE_BRANCH' not found — aborting."
+    exit 1
+  }
 
 if [ "$NO_PR" != "1" ]; then
   if ! git remote get-url origin >/dev/null 2>&1; then
@@ -101,9 +132,15 @@ open_pr() {
   title="$(grep -m1 '^# ' "$spec_file" | sed 's/^# *//')"
   [ -n "$title" ] || title="$name"
 
-  [ "$NO_PR" = "1" ] && { echo "NO_PR=1 — skipping push/PR for $branch"; return 0; }
+  [ "$NO_PR" = "1" ] && {
+    echo "NO_PR=1 — skipping push/PR for $branch"
+    return 0
+  }
 
-  git push -u origin "$branch" || { warn "push failed for $branch — PR skipped (push manually later)"; return 0; }
+  git push -u origin "$branch" || {
+    warn "push failed for $branch — PR skipped (push manually later)"
+    return 0
+  }
 
   # Idempotent: don't open a second PR for the same head branch on re-runs.
   if [ -n "$(gh pr list --head "$branch" --state all --json number --jq '.[].number' 2>/dev/null)" ]; then
@@ -124,14 +161,17 @@ open_pr() {
     "" \
     "🤖 Generated with [Claude Code](https://claude.com/claude-code)")"
 
-  gh pr create --head "$branch" --base "$base" --title "$title" --body "$body" \
-    || warn "gh pr create failed for $branch — create it manually (base: $base)"
+  gh pr create --head "$branch" --base "$base" --title "$title" --body "$body" ||
+    warn "gh pr create failed for $branch — create it manually (base: $base)"
 }
 
 # ── The spec loop ─────────────────────────────────────────────────────────────
 shopt -s nullglob
 SPECS=("$SPECS_DIR"/*.md)
-[ ${#SPECS[@]} -gt 0 ] || { echo "No specs in $SPECS_DIR — nothing to do."; exit 1; }
+[ ${#SPECS[@]} -gt 0 ] || {
+  echo "No specs in $SPECS_DIR — nothing to do."
+  exit 1
+}
 
 prev_branch="$BASE_BRANCH"
 
@@ -149,9 +189,9 @@ for spec in "${SPECS[@]}"; do
 
   if [ -f "$done_marker" ]; then
     say "SPEC $name — already done (rm $done_marker to redo)"
-    git rev-parse --verify "$branch" >/dev/null 2>&1 \
-      && prev_branch="$branch" \
-      || warn "$branch missing despite done marker — next spec will stack on '$prev_branch'"
+    git rev-parse --verify "$branch" >/dev/null 2>&1 &&
+      prev_branch="$branch" ||
+      warn "$branch missing despite done marker — next spec will stack on '$prev_branch'"
     continue
   fi
 
@@ -168,25 +208,18 @@ for spec in "${SPECS[@]}"; do
   spec_ok=0
 
   for pass in $(seq 1 "$MAX_PASSES"); do
-    run_timed "GENERATOR  ($name, pass $pass/$MAX_PASSES)" \
-      claude -p "$(cat "$HARNESS_DIR/generator.md")
+    run_stage "GENERATOR  ($name, pass $pass/$MAX_PASSES)" "$GEN_MODEL" medium "$HARNESS_DIR/generator.md" ||
+      {
+        warn "generator stage kept failing — treating this pass as findings and continuing"
+        continue
+      }
 
----
-The spec for this run is: \`$spec\` — read it now." \
-      --effort medium \
-      "${CLAUDE_FLAGS[@]}"
-
-    run_timed "EVALUATOR  ($name, pass $pass/$MAX_PASSES)" \
-      claude -p "$(cat "$HARNESS_DIR/evaluator.md")
-
----
-The spec for this run is: \`$spec\` — read it now." \
-      --effort high \
-      "${CLAUDE_FLAGS[@]}"
+    run_stage "EVALUATOR  ($name, pass $pass/$MAX_PASSES)" "$EVAL_MODEL" high "$HARNESS_DIR/evaluator.md" ||
+      warn "evaluator stage kept failing — no verdict this pass"
 
     if [ -f "$FINDINGS" ] && head -1 "$FINDINGS" | grep -q '^PASS'; then
       say "SPEC $name — PASS on pass $pass"
-      date -u +"%Y-%m-%dT%H:%M:%SZ" > "$done_marker"
+      date -u +"%Y-%m-%dT%H:%M:%SZ" >"$done_marker"
       cp "$FINDINGS" "$STATE_DIR/$name.findings.md" 2>/dev/null || true
       spec_ok=1
       break

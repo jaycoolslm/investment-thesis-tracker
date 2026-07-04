@@ -63,7 +63,8 @@ Useful knobs (all env, all optional):
 MAX_PASSES=4               # generator↔evaluator iterations cap PER SPEC
 BASE_BRANCH=main           # what the first spec branches off
 BRANCH_PREFIX=harness/     # branch names: harness/<spec-name>
-MODEL=claude-opus-4-8      # empty = CLI default
+GEN_MODEL=fable            # generator model (fable one-shots the builds)
+EVAL_MODEL=opus            # evaluator model (preserves fable quota for building)
 ONLY_SPEC=04-remove-bullmq-redis.md   # run a single spec (stacks on the existing earlier branches)
 CONTINUE_ON_FAIL=1         # don't abort the queue on a failed spec (risky — see above)
 NO_PR=1                    # skip push + PR creation; local branches only
@@ -76,10 +77,10 @@ stacked on top of it — they contain its commits), and re-run. Revert everythin
 
 ## Permissions & effort (per stage)
 
-| Stage | Effort | Why |
-|-------|--------|-----|
-| Generator | `medium` | Steady, high-volume building over a long run |
-| Evaluator | `high`   | Adversarial judgement — reruns the suites, hunts half-removed features |
+| Stage | Model | Effort | Why |
+|-------|-------|--------|-----|
+| Generator | `fable` | `medium` | Fable one-shots the builds; medium effort keeps quota for the whole queue |
+| Evaluator | `opus`  | `high`   | Adversarial judgement — reruns the suites, hunts half-removed features — without burning fable quota on verification |
 
 Both run with `--permission-mode auto` — no `--dangerously-skip-permissions`.
 
