@@ -11,7 +11,7 @@ vi.mock("../../agent/codex-agent.js", () => ({
 }));
 
 // In integration tests we let config.ts parse real env vars from Testcontainers.
-// We do NOT mock config here — the global setup has set DATABASE_URL and REDIS_URL.
+// We do NOT mock config here — the global setup has set DATABASE_URL.
 
 // Dynamic imports after mocks
 const { createApp } = await import("../../app.js");

@@ -1,16 +1,13 @@
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { RedisContainer } from "@testcontainers/redis";
 import pg from "pg";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 export default async function setup() {
   const pgContainer = await new PostgreSqlContainer("postgres:16-alpine").start();
-  const redisContainer = await new RedisContainer("redis:7-alpine").start();
 
   // Set env vars for the test process — config.ts reads these
   process.env.DATABASE_URL = pgContainer.getConnectionUri();
-  process.env.REDIS_URL = redisContainer.getConnectionUrl();
   process.env.NODE_ENV = "test";
   process.env.OPENAI_API_KEY = "test-key";
 
@@ -37,6 +34,5 @@ export default async function setup() {
 
   return async function teardown() {
     await pgContainer.stop();
-    await redisContainer.stop();
   };
 }

@@ -31,33 +31,13 @@ vi.mock("../../services/market-data.js", () => ({
   },
 }));
 
-// Mock queue to avoid Redis
-const mockEnqueueMonitoringBatch = vi.fn();
-
-vi.mock("../../jobs/queue.js", () => ({
-  enqueueMonitoringBatch: (...args: unknown[]) =>
-    mockEnqueueMonitoringBatch(...args),
-  getMonitoringBatchState: vi.fn().mockResolvedValue(null),
-  redisConnection: {
-    hsetnx: vi.fn().mockResolvedValue(1),
-    multi: vi.fn(() => ({
-      hset: vi.fn().mockReturnThis(),
-      expire: vi.fn().mockReturnThis(),
-      exec: vi.fn().mockResolvedValue([]),
-    })),
-    del: vi.fn(),
-    hgetall: vi.fn().mockResolvedValue({}),
-  },
-  monitoringQueue: {},
-  bulkQueue: {},
-}));
-
 const { db } = await import("../../db/index.js");
 const { weeklyLogs } = await import("../../db/schema.js");
 const { seedManyHoldings, cleanAllTables } = await import(
   "../../__tests__/helpers.js"
 );
 const { runMonitoringBatch } = await import("../../jobs/scheduler.js");
+const { clearRegistry } = await import("../../services/batch-runner.js");
 
 // Import the service class for direct testing
 const { WeeklyMonitoringService } = await import(
@@ -66,6 +46,7 @@ const { WeeklyMonitoringService } = await import(
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  clearRegistry();
   mockCallCount = 0;
   await cleanAllTables();
 });
@@ -97,15 +78,18 @@ async function withConcurrency<T>(
 }
 
 describe("Stress test: 200+ holdings batch (integration)", () => {
-  it("scheduler enqueues 220 holdings into monitoring batch", { timeout: 30_000 }, async () => {
+  it("scheduler runs 220 holdings through a monitoring batch", { timeout: 60_000 }, async () => {
     await seedManyHoldings(220);
 
-    await runMonitoringBatch();
+    const result = await runMonitoringBatch();
 
-    expect(mockEnqueueMonitoringBatch).toHaveBeenCalledOnce();
-    const [weekLabel, items] = mockEnqueueMonitoringBatch.mock.calls[0];
-    expect(weekLabel).toBeDefined();
-    expect(items).toHaveLength(220);
+    expect(result).not.toBeNull();
+    expect(result!.weekLabel).toBeDefined();
+    expect(result!.total).toBe(220);
+
+    await result!.done;
+    const rows = await db.select().from(weeklyLogs);
+    expect(rows).toHaveLength(220);
   });
 
   it("direct monitoring of 200 holdings completes under 60s with mocked agent", { timeout: 120_000 }, async () => {

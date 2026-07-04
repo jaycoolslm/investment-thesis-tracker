@@ -1,12 +1,47 @@
 import { Router } from "express";
 import { sql } from "drizzle-orm";
 import { progressEmitter } from "../progress.js";
-import { getMonitoringBatchState } from "../jobs/queue.js";
-import { runMonitoringBatch } from "../jobs/scheduler.js";
+import { getBatch, type BatchState } from "../services/batch-runner.js";
+import { runMonitoringBatch, monitoringBatchId } from "../jobs/scheduler.js";
 import { getCurrentWeek } from "../services/weekly-monitoring.js";
 import { db } from "../db/index.js";
 
 export const monitoringRouter = Router();
+
+function toStatusPayload(state: BatchState) {
+  return {
+    total: state.total,
+    completed: state.completed,
+    failed: state.failed,
+    status: state.status,
+    startedAt: state.startedAt,
+  };
+}
+
+/** Derive a completed-batch summary from weekly_logs (fresh-process fallback). */
+async function summaryFromLogs(weekLabel: string) {
+  const rows = await db.execute<{ total: string; started_at: string }>(sql`
+    SELECT COUNT(*)::text AS total, MIN(created_at)::text AS started_at
+    FROM weekly_logs
+    WHERE week_label = ${weekLabel}
+  `);
+  const total = parseInt(rows.rows[0]?.total ?? "0", 10);
+  if (total === 0) return null;
+
+  return {
+    total,
+    completed: total,
+    failed: 0,
+    status: "complete" as const,
+    startedAt: rows.rows[0].started_at,
+  };
+}
+
+function previousWeekLabel(): string {
+  const lastWeek = new Date();
+  lastWeek.setDate(lastWeek.getDate() - 7);
+  return getCurrentWeek(lastWeek).weekLabel;
+}
 
 // POST /api/monitoring/trigger — Manually trigger batch monitoring for all active holdings
 monitoringRouter.post("/monitoring/trigger", async (_req, res) => {
@@ -15,16 +50,16 @@ monitoringRouter.post("/monitoring/trigger", async (_req, res) => {
 
     if (!result) {
       const { weekLabel } = getCurrentWeek();
-      const existing = await getMonitoringBatchState(weekLabel);
-      if (existing) {
+      const existing = getBatch(monitoringBatchId(weekLabel));
+      if (existing?.status === "active") {
         res.status(409).json({
-          error: `Batch already exists for ${weekLabel}`,
+          error: `Batch already running for ${weekLabel}`,
           weekLabel,
-          ...existing,
+          ...toStatusPayload(existing),
         });
         return;
       }
-      res.status(200).json({ message: "No active holdings with theses to monitor" });
+      res.status(200).json({ message: "Nothing to monitor this week" });
       return;
     }
 
@@ -44,23 +79,27 @@ monitoringRouter.post("/monitoring/trigger", async (_req, res) => {
 // GET /api/monitoring/status — Get current or latest batch status
 monitoringRouter.get("/monitoring/status", async (_req, res) => {
   const { weekLabel } = getCurrentWeek();
-  let state = await getMonitoringBatchState(weekLabel);
+  const prevWeek = previousWeekLabel();
 
-  // Fall back to previous week if current week has no batch
-  if (!state) {
-    const lastWeek = new Date();
-    lastWeek.setDate(lastWeek.getDate() - 7);
-    const { weekLabel: prevWeekLabel } = getCurrentWeek(lastWeek);
-    state = await getMonitoringBatchState(prevWeekLabel);
+  // Registry first (this process ran or is running a batch)
+  for (const label of [weekLabel, prevWeek]) {
+    const state = getBatch(monitoringBatchId(label));
     if (state) {
-      res.json({ weekLabel: prevWeekLabel, ...state });
+      res.json({ weekLabel: label, ...toStatusPayload(state) });
       return;
     }
-    res.status(404).json({ error: "No monitoring batch found" });
-    return;
   }
 
-  res.json({ weekLabel, ...state });
+  // Fresh process: derive a completed summary from weekly_logs
+  for (const label of [weekLabel, prevWeek]) {
+    const summary = await summaryFromLogs(label);
+    if (summary) {
+      res.json({ weekLabel: label, ...summary });
+      return;
+    }
+  }
+
+  res.status(404).json({ error: "No monitoring batch found" });
 });
 
 // GET /api/monitoring/progress — SSE stream for batch progress events
@@ -75,7 +114,7 @@ monitoringRouter.get("/monitoring/progress", async (req, res) => {
   res.flushHeaders();
 
   // Send current state immediately on connect
-  const state = await getMonitoringBatchState(weekLabel);
+  const state = getBatch(monitoringBatchId(weekLabel));
   if (state) {
     res.write(
       `data: ${JSON.stringify({ type: "progress", completed: state.completed, failed: state.failed, total: state.total })}\n\n`,
@@ -83,14 +122,14 @@ monitoringRouter.get("/monitoring/progress", async (req, res) => {
 
     if (state.status === "complete") {
       res.write(
-        `data: ${JSON.stringify({ type: "batch_complete", ...state })}\n\n`,
+        `data: ${JSON.stringify({ type: "batch_complete", ...toStatusPayload(state), failures: state.failures })}\n\n`,
       );
       setTimeout(() => res.end(), 100);
       return;
     }
   }
 
-  const eventKey = `monitoring:${weekLabel}`;
+  const eventKey = monitoringBatchId(weekLabel);
 
   function onEvent(event: Record<string, unknown>) {
     res.write(`data: ${JSON.stringify(event)}\n\n`);

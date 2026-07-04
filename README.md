@@ -22,8 +22,8 @@ See `CLAUDE.md` for the full architecture, project structure, and conventions.
 Three terminals — infra in containers, backend + frontend on the host with hot-reload.
 
 ```bash
-# 1. Infrastructure (Postgres + Redis)
-docker compose up -d postgres redis
+# 1. Infrastructure (Postgres)
+docker compose up -d postgres
 
 # 2. One-time DB setup
 pnpm install

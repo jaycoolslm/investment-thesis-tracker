@@ -23,64 +23,29 @@ vi.mock("../../services/market-data.js", () => ({
   },
 }));
 
-// Mock queue/Redis for batch operations
-const mockEnqueueMonitoringBatch = vi.fn();
-let hsetnxCallCount = 0;
-const batchStates = new Map<string, Record<string, string>>();
-
-vi.mock("../../jobs/queue.js", () => ({
-  enqueueMonitoringBatch: (...args: unknown[]) =>
-    mockEnqueueMonitoringBatch(...args),
-  getMonitoringBatchState: vi.fn(async (weekLabel: string) => {
-    const raw = batchStates.get(`monitoring:batch:${weekLabel}`);
-    if (!raw?.status) return null;
-    return {
-      total: parseInt(raw.total, 10),
-      completed: parseInt(raw.completed, 10),
-      failed: parseInt(raw.failed, 10),
-      status: raw.status,
-      startedAt: raw.startedAt,
-    };
-  }),
-  redisConnection: {
-    hsetnx: vi.fn(async (key: string, field: string, value: string) => {
-      hsetnxCallCount++;
-      if (!batchStates.has(key)) {
-        batchStates.set(key, { [field]: value });
-        return 1;
-      }
-      return 0; // Already exists
-    }),
-    multi: vi.fn(() => ({
-      hset: vi.fn(function (this: unknown, key: string, data: Record<string, string>) {
-        const existing = batchStates.get(key) ?? {};
-        batchStates.set(key, { ...existing, ...data });
-        return this;
-      }),
-      expire: vi.fn().mockReturnThis(),
-      exec: vi.fn().mockResolvedValue([]),
-    })),
-    del: vi.fn(async (key: string) => {
-      batchStates.delete(key);
-    }),
-    hgetall: vi.fn(async (key: string) => batchStates.get(key) ?? {}),
-  },
-  monitoringQueue: {},
-  bulkQueue: {},
-}));
-
 // Dynamic imports after mocks
 const { createApp } = await import("../../app.js");
 const { db } = await import("../../db/index.js");
 const { holdings, theses, weeklyLogs, documents } =
   await import("../../db/schema.js");
+const { and, eq } = await import("drizzle-orm");
+const { clearRegistry } = await import("../../services/batch-runner.js");
+const { runMonitoringBatch } = await import("../../jobs/scheduler.js");
+const { getCurrentWeek } = await import("../../services/weekly-monitoring.js");
 
 const app = createApp();
 
+const WEEKLY_LOG_RESULT = {
+  ...VALID_WEEKLY_LOG_FIXTURE,
+  priceChangePct: null,
+  indexChangePct: null,
+  relativePerf: null,
+};
+
 beforeEach(async () => {
   vi.clearAllMocks();
-  hsetnxCallCount = 0;
-  batchStates.clear();
+  clearRegistry();
+  mockAnalyseWeekly.mockResolvedValue(WEEKLY_LOG_RESULT);
   await db.delete(documents);
   await db.delete(weeklyLogs);
   await db.delete(theses);
@@ -105,18 +70,90 @@ async function seedHoldingWithThesis(ticker = "AAPL") {
 }
 
 describe("Idempotent batch re-run (integration)", () => {
-  it("POST /api/monitoring/trigger returns 409 on second call within same week", async () => {
+  it("POST /api/monitoring/trigger returns 409 while a batch is running", async () => {
     await seedHoldingWithThesis();
 
-    // First call succeeds
+    // Hold the batch open: the agent call blocks until we release it
+    let release!: () => void;
+    mockAnalyseWeekly.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve(WEEKLY_LOG_RESULT);
+        }),
+    );
+
     const first = await request(app).post("/api/monitoring/trigger").send();
     expect(first.status).toBe(202);
     expect(first.body.total).toBe(1);
 
-    // Second call returns 409
+    // The batch worker starts asynchronously — wait until it reaches the agent
+    // call so `release` is assigned and the batch is genuinely mid-flight.
+    await vi.waitFor(() => expect(mockAnalyseWeekly).toHaveBeenCalled());
+
     const second = await request(app).post("/api/monitoring/trigger").send();
     expect(second.status).toBe(409);
-    expect(second.body.error).toContain("Batch already exists");
+    expect(second.body.error).toContain("already running");
+
+    // Let the batch finish so it doesn't leak into other tests
+    release();
+    await vi.waitFor(async () => {
+      const res = await request(app).get("/api/monitoring/status");
+      expect(res.body.status).toBe("complete");
+    });
+  });
+
+  it("re-trigger after completion reports nothing to do and does not duplicate weekly logs", async () => {
+    const holding = await seedHoldingWithThesis();
+
+    const first = await request(app).post("/api/monitoring/trigger").send();
+    expect(first.status).toBe(202);
+
+    await vi.waitFor(async () => {
+      const res = await request(app).get("/api/monitoring/status");
+      expect(res.body.status).toBe("complete");
+    });
+
+    const second = await request(app).post("/api/monitoring/trigger").send();
+    expect(second.status).toBe(200);
+    expect(second.body.message).toContain("Nothing to monitor");
+
+    // Exactly one log per (holding, week)
+    const { weekLabel } = getCurrentWeek();
+    const logs = await db
+      .select()
+      .from(weeklyLogs)
+      .where(
+        and(
+          eq(weeklyLogs.holdingId, holding.id),
+          eq(weeklyLogs.weekLabel, weekLabel),
+        ),
+      );
+    expect(logs).toHaveLength(1);
+    expect(mockAnalyseWeekly).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-trigger resumes only holdings without a log this week", async () => {
+    const logged = await seedHoldingWithThesis("AAPL");
+    await seedHoldingWithThesis("MSFT");
+
+    // AAPL already has a log for this week (simulates a crashed batch)
+    const { weekLabel, weekDate } = getCurrentWeek();
+    await db.insert(weeklyLogs).values({
+      holdingId: logged.id,
+      weekLabel,
+      weekDate,
+      thesisImpact: "unchanged",
+      summary: "Pre-existing log",
+    });
+
+    const result = await runMonitoringBatch();
+    expect(result).not.toBeNull();
+    expect(result!.total).toBe(1); // only MSFT
+    await result!.done;
+
+    const logs = await db.select().from(weeklyLogs);
+    expect(logs).toHaveLength(2);
+    expect(mockAnalyseWeekly).toHaveBeenCalledTimes(1);
   });
 
   it("GET /api/monitoring/status returns batch state after trigger", async () => {
@@ -128,7 +165,30 @@ describe("Idempotent batch re-run (integration)", () => {
     expect(res.status).toBe(200);
     expect(res.body.weekLabel).toBeDefined();
     expect(res.body.total).toBe(1);
-    expect(res.body.status).toBe("active");
+    expect(["active", "complete"]).toContain(res.body.status);
+  });
+
+  it("GET /api/monitoring/status derives a summary from weekly_logs on a fresh process", async () => {
+    const holding = await seedHoldingWithThesis();
+    const result = await runMonitoringBatch();
+    await result!.done;
+
+    // Simulate a restart: registry gone, logs persist
+    clearRegistry();
+
+    const res = await request(app).get("/api/monitoring/status");
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("complete");
+    expect(res.body.total).toBe(1);
+    expect(res.body.completed).toBe(1);
+    expect(res.body.failed).toBe(0);
+    expect(res.body.startedAt).toBeDefined();
+
+    const logs = await db
+      .select()
+      .from(weeklyLogs)
+      .where(eq(weeklyLogs.holdingId, holding.id));
+    expect(logs).toHaveLength(1);
   });
 
   it("GET /api/monitoring/status returns 404 when no batch exists", async () => {
