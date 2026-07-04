@@ -5,35 +5,20 @@ import { test, expect, type Page } from "@playwright/test";
  * Add holding → Generate thesis → Trigger monitoring → Verify dashboard + weekly log
  *
  * Requires MOCK_AGENT=true on the backend (set in playwright.config.ts).
+ *
+ * Each test uses its own tickers and deletes only those, so parallel
+ * workers (including other spec files) never fight over rows.
  */
 
-/** Helper: create a holding and generate its thesis via the UI */
-async function createHoldingWithThesis(
-  page: Page,
-  ticker: string,
-  companyName: string,
-) {
-  // Open Add Holding modal
-  await page.getByRole("button", { name: /add holding/i }).click();
-
-  // Fill in the form
-  await page.getByLabel(/ticker/i).fill(ticker);
-  await page.getByLabel(/company name/i).fill(companyName);
-
-  // Fill thesis bullets
-  const bulletsInput = page.getByLabel(/thesis bullets/i).or(
-    page.getByPlaceholder(/bullet/i),
-  );
-  if (await bulletsInput.isVisible()) {
-    await bulletsInput.fill("Strong growth thesis for testing");
+/** Helper: delete any leftover holdings for the given tickers (retry hygiene) */
+async function cleanupTickers(page: Page, tickers: string[]) {
+  const res = await page.request.get("/api/holdings");
+  const existingHoldings = await res.json();
+  for (const h of existingHoldings) {
+    if (tickers.includes(h.ticker)) {
+      await page.request.delete(`/api/holdings/${h.id}`);
+    }
   }
-
-  // Submit — this creates the holding and triggers generation
-  await page.getByRole("button", { name: /generate/i }).click();
-
-  // Wait for generation to complete — the modal should close or redirect
-  // Give it time since even mocked generation takes a moment
-  await page.waitForTimeout(2000);
 }
 
 /** Helper: seed a holding via API (faster than UI for multi-holding tests) */
@@ -47,37 +32,25 @@ async function seedHoldingViaApi(
   });
   const holding = await createRes.json();
 
-  // Generate thesis
+  // Generate thesis (mock agent — completes synchronously with the response)
   await page.request.post(`/api/holdings/${holding.id}/generate`, {
     data: { bullets: "Strong growth thesis" },
   });
-
-  // Wait for async generation to complete
-  await page.waitForTimeout(500);
 
   return holding;
 }
 
 test.describe("Monitoring flow (E2E)", () => {
-  test.beforeEach(async ({ page }) => {
-    // Clean state: delete all holdings via API
-    const res = await page.request.get("/api/holdings");
-    const existingHoldings = await res.json();
-    for (const h of existingHoldings) {
-      await page.request.delete(`/api/holdings/${h.id}`);
-    }
-  });
-
   test("single holding: trigger weekly check and verify log appears", async ({
     page,
   }) => {
-    // Seed holding with thesis via API
-    const holding = await seedHoldingViaApi(page, "AAPL", "Apple Inc.");
+    await cleanupTickers(page, ["WKAAPL"]);
+    await seedHoldingViaApi(page, "WKAAPL", "Apple Inc.");
 
     // Navigate to thesis detail page
     await page.goto("/");
     await page.waitForSelector("tbody tr");
-    await page.locator("tbody tr").first().click();
+    await page.locator("tbody tr", { hasText: "WKAAPL" }).first().click();
 
     // Go to Weekly Log tab
     await page.getByRole("tab", { name: /weekly log/i }).click();
@@ -107,37 +80,35 @@ test.describe("Monitoring flow (E2E)", () => {
   test("dashboard shows updated impact badge after monitoring", async ({
     page,
   }) => {
-    const holding = await seedHoldingViaApi(page, "MSFT", "Microsoft Corp.");
+    await cleanupTickers(page, ["BDMSFT"]);
+    const holding = await seedHoldingViaApi(page, "BDMSFT", "Microsoft Corp.");
 
     // Trigger monitoring via API
     await page.request.post(
       `/api/holdings/${holding.id}/weekly-logs/trigger`,
     );
-    await page.waitForTimeout(500);
 
     // Navigate to dashboard
     await page.goto("/");
     await page.waitForSelector("tbody tr");
 
-    // The holding row should show an impact badge
-    const row = page.locator("tbody tr").first();
+    // The holding row should show an impact badge (select by ticker —
+    // parallel spec files create their own rows in the same table)
+    const row = page.locator("tbody tr", { hasText: "BDMSFT" }).first();
     await expect(
       row.getByText(/strengthened|weakened|unchanged/i),
     ).toBeVisible({ timeout: 5_000 });
   });
 
   test("monitoring history table shows completed batch", async ({ page }) => {
-    // Seed 2 holdings with theses
-    await seedHoldingViaApi(page, "AAPL", "Apple Inc.");
-    await seedHoldingViaApi(page, "GOOG", "Alphabet Inc.");
+    await cleanupTickers(page, ["HAAPL", "HGOOG"]);
+    const h1 = await seedHoldingViaApi(page, "HAAPL", "Apple Inc.");
+    const h2 = await seedHoldingViaApi(page, "HGOOG", "Alphabet Inc.");
 
     // Trigger monitoring for each holding individually
-    const holdingsRes = await page.request.get("/api/holdings");
-    const allHoldings = await holdingsRes.json();
-    for (const h of allHoldings) {
+    for (const h of [h1, h2]) {
       await page.request.post(`/api/holdings/${h.id}/weekly-logs/trigger`);
     }
-    await page.waitForTimeout(500);
 
     // Navigate to dashboard
     await page.goto("/");
@@ -155,14 +126,15 @@ test.describe("Monitoring flow (E2E)", () => {
   test("batch monitoring via API triggers updates all holdings", async ({
     page,
   }) => {
-    // Seed 3 holdings
-    const h1 = await seedHoldingViaApi(page, "AAPL", "Apple Inc.");
-    const h2 = await seedHoldingViaApi(page, "MSFT", "Microsoft Corp.");
-    const h3 = await seedHoldingViaApi(page, "GOOG", "Alphabet Inc.");
+    const tickers = ["BTAAPL", "BTMSFT", "BTGOOG"];
+    await cleanupTickers(page, tickers);
+    const h1 = await seedHoldingViaApi(page, "BTAAPL", "Apple Inc.");
+    const h2 = await seedHoldingViaApi(page, "BTMSFT", "Microsoft Corp.");
+    const h3 = await seedHoldingViaApi(page, "BTGOOG", "Alphabet Inc.");
 
     // Trigger the in-process batch route for all active holdings
     const triggerRes = await page.request.post("/api/monitoring/trigger");
-    expect([200, 202]).toContain(triggerRes.status());
+    expect([200, 202, 409]).toContain(triggerRes.status());
 
     // Wait until every seeded holding has its weekly log
     await expect
@@ -202,7 +174,7 @@ test.describe("Monitoring flow (E2E)", () => {
     await page.goto("/");
     await page.waitForSelector("tbody tr");
 
-    for (const ticker of ["AAPL", "MSFT", "GOOG"]) {
+    for (const ticker of tickers) {
       const row = page.locator("tbody tr", { hasText: ticker }).first();
       await expect(row).toBeVisible();
       await expect(

@@ -62,9 +62,10 @@ export class ThesisAgent {
         `${input.ticker} analyst price targets`,
         `${input.ticker} competitive landscape`,
         `${input.ticker} valuation multiples`,
+        `${input.ticker} recent news`,
       ];
       for (const query of queries) {
-        await new Promise((r) => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 700));
         onEvent?.({
           type: "item.completed",
           item: { id: query, type: "web_search", query },

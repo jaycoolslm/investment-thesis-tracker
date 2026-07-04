@@ -15,7 +15,7 @@ Thesis Tracker is a web app with three modes: interactive (create holdings, gene
 |              Web UI (React)              |
 +------------------------------------------+
                     |
-              REST / SSE
+              REST (polled)
                     |
 +------------------------------------------+
 |          API Server (Express.js)         |
@@ -347,7 +347,7 @@ Export
   GET    /api/holdings/:id/export/pdf     — PDF export (P1)
 ```
 
-SSE at `GET /api/holdings/:id/progress` for generation progress. Bulk job status will use the same SSE pattern (Sprint 4).
+Progress is polled: `GET /api/holdings/:id/generation-status` for generation, `GET /api/bulk-generate/:batchId/status` for bulk, `GET /api/monitoring/status` for batch monitoring. No SSE/WebSockets.
 
 ---
 

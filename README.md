@@ -42,10 +42,10 @@ Open <http://localhost:5173>. Vite proxies `/api` to the backend on 3001.
 ### Tests
 
 ```bash
-pnpm test                 # 78 backend unit tests
+pnpm test                 # 89 backend unit tests
 pnpm test:integration     # 49 integration tests (Testcontainers — needs Docker)
-cd web && pnpm test       # 27 frontend component tests
-pnpm test:e2e             # 11 Playwright E2E tests (needs Docker + dev servers)
+cd web && pnpm test       # 33 frontend component tests
+pnpm test:e2e             # 14 Playwright E2E tests (needs Docker + dev servers)
 ```
 
 `MOCK_AGENT=true` makes the AI calls return fixture data — used by E2E tests and useful for local demo without burning Azure OpenAI credits.
