@@ -22,14 +22,21 @@ import {
   startBulkGeneration,
   cancelBulkGeneration,
 } from "../api/bulk.ts";
-import { triggerMonitoringBatch } from "../api/client.ts";
+import {
+  triggerMonitoringBatch,
+  getGenerationStatus,
+} from "../api/client.ts";
 
 interface GenerationState {
   holdingId: string;
   ticker: string;
   bullets: string;
-  hasDocuments: boolean;
+  /** True when restored after a page reload — poll without re-triggering. */
+  resume: boolean;
 }
+
+// Survives page reloads so an in-flight generation resumes showing progress.
+const ACTIVE_GENERATION_KEY = "activeGeneration";
 
 type BulkStep = "idle" | "upload" | "generating" | "complete";
 
@@ -60,6 +67,38 @@ export function Layout() {
       setMonitoringActive(true);
     }
   }, [monitoringStatus.data]);
+
+  // If a generation was in flight when the page reloaded, resume its progress
+  useEffect(() => {
+    const stored = sessionStorage.getItem(ACTIVE_GENERATION_KEY);
+    if (!stored) return;
+
+    let saved: { holdingId: string; ticker: string };
+    try {
+      saved = JSON.parse(stored);
+    } catch {
+      sessionStorage.removeItem(ACTIVE_GENERATION_KEY);
+      return;
+    }
+
+    getGenerationStatus(saved.holdingId)
+      .then((status) => {
+        if (status?.status === "running") {
+          setGeneration({
+            holdingId: saved.holdingId,
+            ticker: saved.ticker,
+            bullets: "",
+            resume: true,
+          });
+        } else {
+          // Finished (or lost) while the page was away — nothing to resume
+          sessionStorage.removeItem(ACTIVE_GENERATION_KEY);
+          queryClient.invalidateQueries({ queryKey: ["holdings"] });
+        }
+      })
+      .catch(() => sessionStorage.removeItem(ACTIVE_GENERATION_KEY));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // When monitoring batch completes
   useEffect(() => {
@@ -117,11 +156,18 @@ export function Layout() {
       {
         onSuccess: (result) => {
           setModalOpen(false);
+          sessionStorage.setItem(
+            ACTIVE_GENERATION_KEY,
+            JSON.stringify({
+              holdingId: result.holdingId,
+              ticker: result.ticker,
+            }),
+          );
           setGeneration({
             holdingId: result.holdingId,
             ticker: result.ticker,
             bullets: result.bullets,
-            hasDocuments: result.hasDocuments,
+            resume: false,
           });
         },
         onError: (err) => {
@@ -135,6 +181,7 @@ export function Layout() {
   }
 
   function handleGenerationComplete() {
+    sessionStorage.removeItem(ACTIVE_GENERATION_KEY);
     if (generation) {
       addToast(`Thesis generated for ${generation.ticker}.`, "success");
       queryClient.invalidateQueries({ queryKey: ["holdings"] });
@@ -143,8 +190,15 @@ export function Layout() {
   }
 
   function handleRetry() {
+    sessionStorage.removeItem(ACTIVE_GENERATION_KEY);
     setGeneration(null);
     setModalOpen(true);
+  }
+
+  function handleGenerationStale() {
+    sessionStorage.removeItem(ACTIVE_GENERATION_KEY);
+    setGeneration(null);
+    queryClient.invalidateQueries({ queryKey: ["holdings"] });
   }
 
   async function handleBulkStart(batchId: string, excludeRows: number[]) {
@@ -182,6 +236,10 @@ export function Layout() {
       { batchId: bulkBatchId, holdingIds },
       {
         onSuccess: () => {
+          // Drop the completed batch's cached status so polling restarts fresh
+          queryClient.removeQueries({
+            queryKey: ["bulkProgress", bulkBatchId],
+          });
           setShowResults(false);
           setBulkStep("generating");
         },
@@ -214,8 +272,14 @@ export function Layout() {
           <button
             onClick={async () => {
               try {
-                await triggerMonitoringBatch();
-                setMonitoringActive(true);
+                const result = await triggerMonitoringBatch();
+                if (result.status === "active") {
+                  // Drop any previous run's cached status before polling
+                  queryClient.removeQueries({ queryKey: ["monitoringStatus"] });
+                  setMonitoringActive(true);
+                } else if (result.message) {
+                  addToast(result.message, "success");
+                }
               } catch (err) {
                 addToast(
                   err instanceof Error ? err.message : "Failed to trigger monitoring.",
@@ -351,9 +415,10 @@ export function Layout() {
           holdingId={generation.holdingId}
           ticker={generation.ticker}
           bullets={generation.bullets}
-          hasDocuments={generation.hasDocuments}
+          resume={generation.resume}
           onComplete={handleGenerationComplete}
           onRetry={handleRetry}
+          onStale={handleGenerationStale}
         />
       )}
 

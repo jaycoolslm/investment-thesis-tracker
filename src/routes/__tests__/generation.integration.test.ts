@@ -51,6 +51,14 @@ describe("Thesis generation (integration)", () => {
     expect(thesisRes.body.sources).toHaveLength(
       VALID_THESIS_FIXTURE.sources.length,
     );
+
+    // The polled generation status reflects completion
+    const statusRes = await request(app).get(
+      `/api/holdings/${holding.id}/generation-status`,
+    );
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.status).toBe("complete");
+    expect(Array.isArray(statusRes.body.events)).toBe(true);
   });
 
   it("POST /api/holdings/:id/generate returns 404 for missing holding", async () => {

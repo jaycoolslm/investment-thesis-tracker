@@ -8,23 +8,27 @@ interface GenerationProgressProps {
   holdingId: string;
   ticker: string;
   bullets: string;
-  hasDocuments: boolean;
+  /** True when restored after a page reload — polls without re-triggering. */
+  resume?: boolean;
   onComplete: () => void;
   onRetry: () => void;
+  /** Called when a resumed generation is no longer tracked by the server. */
+  onStale?: () => void;
 }
 
 export function GenerationProgress({
   holdingId,
   ticker,
   bullets,
-  hasDocuments,
+  resume = false,
   onComplete,
   onRetry,
+  onStale,
 }: GenerationProgressProps) {
-  const { activity, isComplete, error } = useGenerationProgress(
+  const { activity, isComplete, error, isStale } = useGenerationProgress(
     holdingId,
     bullets,
-    hasDocuments,
+    resume,
   );
 
   const completeFired = useRef(false);
@@ -36,6 +40,10 @@ export function GenerationProgress({
       return () => clearTimeout(timer);
     }
   }, [isComplete, onComplete]);
+
+  useEffect(() => {
+    if (isStale) onStale?.();
+  }, [isStale, onStale]);
 
   const feedRef = useRef<HTMLUListElement>(null);
   useEffect(() => {
@@ -136,11 +144,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
           <span className="inline-block w-1.5 h-1.5 bg-brand-400 rounded-full mt-1.5" />
         )}
       </span>
-      <span className="break-words">
-        {item.type === "web_search" && `Searching: "${item.text}"`}
-        {item.type === "file_read" && `Reading: ${item.text}`}
-        {item.type === "activity" && item.text}
-      </span>
+      <span className="break-words">{item.text}</span>
     </li>
   );
 }

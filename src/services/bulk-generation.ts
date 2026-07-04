@@ -1,7 +1,6 @@
 import { randomUUID } from "crypto";
 import { db } from "../db/index.js";
 import { holdings } from "../db/schema.js";
-import { progressEmitter } from "../progress.js";
 import { ThesisGenerationService } from "./thesis-generation.js";
 import {
   runBatch,
@@ -52,7 +51,7 @@ interface BulkItem {
   bullets: string;
 }
 
-/** Run generation for a set of holdings, emitting the same progress events the UI already consumes. */
+/** Run generation for a set of holdings; the UI polls the batch registry for progress. */
 function runBulkItems(batchId: string, items: BulkItem[]): Promise<void> {
   return runBatch(
     batchId,
@@ -61,57 +60,19 @@ function runBulkItems(batchId: string, items: BulkItem[]): Promise<void> {
       const service = new ThesisGenerationService();
       const thesisId = await service.generate(item.holdingId, item.bullets);
       console.log(`[bulk] SUCCESS ${item.ticker} — thesisId=${thesisId}`);
-      progressEmitter.emit(batchId, {
-        type: "holding_complete",
-        holdingId: item.holdingId,
-        ticker: item.ticker,
-        thesisId,
-      });
     },
     {
       concurrency: 3,
       retries: 1,
-      onItemDone: (item) => {
-        const state = getBatch(batchId)!;
-        progressEmitter.emit(batchId, {
-          type: "progress",
-          completed: state.completed,
-          failed: state.failed,
-          total: state.total,
-          currentTicker: item.ticker,
-        });
-      },
       onItemFailed: (item, error) => {
         console.error(`[bulk] FAILED ${item.ticker} — ${error}`);
-        const state = getBatch(batchId)!;
-        progressEmitter.emit(batchId, {
-          type: "holding_failed",
-          holdingId: item.holdingId,
-          ticker: item.ticker,
-          error,
-        });
-        progressEmitter.emit(batchId, {
-          type: "progress",
-          completed: state.completed,
-          failed: state.failed,
-          total: state.total,
-          currentTicker: item.ticker,
-        });
       },
     },
   ).then((state) => {
-    // Cancellation emits its own batch_complete from the cancel endpoint.
     if (state.status === "complete") {
       console.log(
         `[bulk] Batch ${batchId} finished: ${state.completed}/${state.total} complete, ${state.failed} failed`,
       );
-      progressEmitter.emit(batchId, {
-        type: "batch_complete",
-        completed: state.completed,
-        failed: state.failed,
-        total: state.total,
-        failures: state.failures,
-      });
     }
   });
 }
@@ -183,6 +144,7 @@ export function getBatchState(batchId: string) {
     failed: state.failed,
     status: state.status,
     failures: state.failures,
+    startedAt: state.startedAt,
   };
 }
 

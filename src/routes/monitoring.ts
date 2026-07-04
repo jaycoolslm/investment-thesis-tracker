@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { sql } from "drizzle-orm";
-import { progressEmitter } from "../progress.js";
 import { getBatch, type BatchState } from "../services/batch-runner.js";
 import { runMonitoringBatch, monitoringBatchId } from "../jobs/scheduler.js";
 import { getCurrentWeek } from "../services/weekly-monitoring.js";
@@ -15,6 +14,7 @@ function toStatusPayload(state: BatchState) {
     failed: state.failed,
     status: state.status,
     startedAt: state.startedAt,
+    failures: state.failures,
   };
 }
 
@@ -34,6 +34,7 @@ async function summaryFromLogs(weekLabel: string) {
     failed: 0,
     status: "complete" as const,
     startedAt: rows.rows[0].started_at,
+    failures: [],
   };
 }
 
@@ -100,50 +101,6 @@ monitoringRouter.get("/monitoring/status", async (_req, res) => {
   }
 
   res.status(404).json({ error: "No monitoring batch found" });
-});
-
-// GET /api/monitoring/progress — SSE stream for batch progress events
-monitoringRouter.get("/monitoring/progress", async (req, res) => {
-  const { weekLabel } = getCurrentWeek();
-
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-  res.flushHeaders();
-
-  // Send current state immediately on connect
-  const state = getBatch(monitoringBatchId(weekLabel));
-  if (state) {
-    res.write(
-      `data: ${JSON.stringify({ type: "progress", completed: state.completed, failed: state.failed, total: state.total })}\n\n`,
-    );
-
-    if (state.status === "complete") {
-      res.write(
-        `data: ${JSON.stringify({ type: "batch_complete", ...toStatusPayload(state), failures: state.failures })}\n\n`,
-      );
-      setTimeout(() => res.end(), 100);
-      return;
-    }
-  }
-
-  const eventKey = monitoringBatchId(weekLabel);
-
-  function onEvent(event: Record<string, unknown>) {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-
-    if (event.type === "batch_complete") {
-      setTimeout(() => res.end(), 100);
-    }
-  }
-
-  progressEmitter.on(eventKey, onEvent);
-
-  req.on("close", () => {
-    progressEmitter.off(eventKey, onEvent);
-  });
 });
 
 // GET /api/monitoring/history — Past batch run summaries aggregated from weekly_logs

@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { generateThesis } from "../api/client.ts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { generateThesis, getGenerationStatus } from "../api/client.ts";
 
 export interface ActivityItem {
   id: string;
@@ -7,97 +8,67 @@ export interface ActivityItem {
   text: string;
 }
 
+function toActivityItem(line: string, index: number): ActivityItem {
+  const type = line.startsWith("Searching:")
+    ? "web_search"
+    : line.startsWith("Reading:")
+      ? "file_read"
+      : "activity";
+  return { id: String(index), type, text: line };
+}
+
+/**
+ * Fires the generation request (unless resuming after a reload) and polls
+ * GET /api/holdings/:id/generation-status for the live activity feed.
+ */
 export function useGenerationProgress(
   holdingId: string | null,
   bullets: string,
-  hasDocuments: boolean,
+  resume = false,
 ) {
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [isComplete, setIsComplete] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [isStale, setIsStale] = useState(false);
   const generationFired = useRef(false);
-  const activityCounter = useRef(0);
-
-  const addActivity = useCallback(
-    (type: ActivityItem["type"], text: string) => {
-      const id = String(++activityCounter.current);
-      setActivity((prev) => [...prev, { id, type, text }]);
-    },
-    [],
-  );
 
   useEffect(() => {
-    if (!holdingId) return;
+    if (!holdingId || resume || generationFired.current) return;
+    generationFired.current = true;
+    generateThesis(holdingId, bullets).catch((err) => {
+      setRequestError(
+        err instanceof Error ? err.message : "Generation failed.",
+      );
+    });
+  }, [holdingId, bullets, resume]);
 
-    setActivity([]);
-    setIsComplete(false);
-    setError(null);
-    activityCounter.current = 0;
+  const query = useQuery({
+    queryKey: ["generationStatus", holdingId],
+    queryFn: () => getGenerationStatus(holdingId!),
+    enabled: !!holdingId && !requestError && !isStale,
+    retry: false,
+    refetchInterval: (q) => {
+      const status = q.state.data?.status;
+      return status === "complete" || status === "failed" ? false : 2000;
+    },
+  });
 
-    let cancelled = false;
+  // Resuming after a reload: if the server no longer tracks this generation
+  // (restart or eviction), the restored state is stale — stop polling.
+  useEffect(() => {
+    if (resume && query.data === null) setIsStale(true);
+  }, [resume, query.data]);
 
-    // Connect SSE directly to API server in dev (Vite proxy buffers SSE)
-    const baseUrl = import.meta.env.DEV ? "http://localhost:3001" : "";
-    const es = new EventSource(
-      `${baseUrl}/api/holdings/${holdingId}/progress`,
-    );
+  const events = query.data?.events;
+  const activity = useMemo(
+    () => (events ?? []).map(toActivityItem),
+    [events],
+  );
 
-    es.onmessage = (event) => {
-      if (cancelled) return;
-      try {
-        const data = JSON.parse(event.data);
+  const status = query.data?.status;
+  const error =
+    requestError ??
+    (status === "failed"
+      ? (query.data?.error ?? "Generation failed. Please try again.")
+      : null);
 
-        switch (data.type) {
-          case "web_search":
-            addActivity("web_search", data.query);
-            break;
-          case "file_read":
-            addActivity("file_read", data.path);
-            break;
-          case "activity":
-            addActivity("activity", data.message);
-            break;
-          case "complete":
-            setIsComplete(true);
-            es.close();
-            break;
-          case "failed":
-            setError(data.error ?? "Generation failed. Please try again.");
-            es.close();
-            break;
-          // "started" — no-op, modal is already visible
-        }
-      } catch {
-        // ignore malformed
-      }
-    };
-
-    es.onerror = () => {
-      // EventSource auto-reconnects on transient errors.
-    };
-
-    // Fire generation AFTER EventSource is open
-    es.onopen = () => {
-      if (cancelled) return;
-      if (generationFired.current) return;
-      generationFired.current = true;
-
-      generateThesis(holdingId, bullets).catch((err) => {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : "Generation failed.",
-          );
-          es.close();
-        }
-      });
-    };
-
-    return () => {
-      cancelled = true;
-      generationFired.current = false;
-      es.close();
-    };
-  }, [holdingId, bullets, hasDocuments, addActivity]);
-
-  return { activity, isComplete, error };
+  return { activity, isComplete: status === "complete", error, isStale };
 }

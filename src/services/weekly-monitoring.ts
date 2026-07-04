@@ -1,22 +1,9 @@
-import { EventEmitter } from "events";
 import { eq, and, desc } from "drizzle-orm";
-import type { ThreadEvent } from "@openai/codex-sdk";
-import path from "node:path";
 import { db } from "../db/index.js";
 import { holdings, theses, weeklyLogs, documents } from "../db/schema.js";
 import { ThesisAgent } from "../agent/codex-agent.js";
 import { MarketDataService } from "./market-data.js";
 import type { WeeklyAnalysisInput } from "../agent/prompts.js";
-
-export type MonitoringProgressEvent =
-  | { type: "started" }
-  | { type: "fetching_prices" }
-  | { type: "prices_fetched"; priceChangePct: number | null }
-  | { type: "web_search"; query: string }
-  | { type: "activity"; message: string }
-  | { type: "complete" }
-  | { type: "failed"; error: string }
-  | { type: "skipped"; reason: string };
 
 /**
  * Compute ISO 8601 week label, the Monday date, and the Friday date
@@ -55,12 +42,11 @@ export function getCurrentWeek(now: Date = new Date()): {
   return { weekLabel, weekDate, fridayDate: friday };
 }
 
-export class WeeklyMonitoringService extends EventEmitter {
+export class WeeklyMonitoringService {
   private agent: ThesisAgent;
   private marketData: MarketDataService;
 
   constructor(agent?: ThesisAgent, marketData?: MarketDataService) {
-    super();
     this.agent = agent ?? new ThesisAgent();
     this.marketData = marketData ?? new MarketDataService();
   }
@@ -81,7 +67,6 @@ export class WeeklyMonitoringService extends EventEmitter {
       );
 
     if (existing) {
-      this.emitProgress({ type: "skipped", reason: "already_exists" });
       return existing.id;
     }
 
@@ -96,11 +81,8 @@ export class WeeklyMonitoringService extends EventEmitter {
     }
 
     if (holding.status !== "active") {
-      this.emitProgress({ type: "skipped", reason: "not_active" });
       return "";
     }
-
-    this.emitProgress({ type: "started" });
 
     // 4. Load latest thesis
     const [thesis] = await db
@@ -111,9 +93,7 @@ export class WeeklyMonitoringService extends EventEmitter {
       .limit(1);
 
     if (!thesis) {
-      const error = new NoThesisError(holdingId);
-      this.emitProgress({ type: "failed", error: error.message });
-      throw error;
+      throw new NoThesisError(holdingId);
     }
 
     // 5. Load broker research file paths
@@ -123,8 +103,6 @@ export class WeeklyMonitoringService extends EventEmitter {
       .where(eq(documents.holdingId, holdingId));
 
     // 6. Fetch market data
-    this.emitProgress({ type: "fetching_prices" });
-
     const priceResult = await this.marketData.getWeeklyReturn(
       holding.ticker,
       fridayDate,
@@ -141,8 +119,6 @@ export class WeeklyMonitoringService extends EventEmitter {
         ? Math.round((priceChangePct - indexChangePct) * 100) / 100
         : null;
 
-    this.emitProgress({ type: "prices_fetched", priceChangePct });
-
     // 7. Build input and call agent
     const input: WeeklyAnalysisInput = {
       ticker: holding.ticker,
@@ -156,18 +132,10 @@ export class WeeklyMonitoringService extends EventEmitter {
       weekDate,
     };
 
-    let result;
-    try {
-      result = await this.agent.analyseWeekly(
-        input,
-        AbortSignal.timeout(120_000),
-        (event) => this.handleAgentEvent(event),
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      this.emitProgress({ type: "failed", error: message });
-      throw err;
-    }
+    const result = await this.agent.analyseWeekly(
+      input,
+      AbortSignal.timeout(120_000),
+    );
 
     // 8. Overwrite price fields with verified market data values
     result.priceChangePct = priceChangePct;
@@ -202,45 +170,8 @@ export class WeeklyMonitoringService extends EventEmitter {
       return log.id;
     });
 
-    this.emitProgress({ type: "complete" });
     return logId;
   }
-
-  private handleAgentEvent(event: ThreadEvent): void {
-    switch (event.type) {
-      case "item.started":
-        if (event.item.type === "file_change") {
-          const filePath = event.item.changes?.[0]?.path;
-          if (filePath) {
-            this.emitProgress({
-              type: "activity",
-              message: `Reading ${path.basename(filePath)}...`,
-            });
-          }
-        }
-        if (event.item.type === "agent_message") {
-          this.emitProgress({
-            type: "activity",
-            message: "Compiling weekly analysis...",
-          });
-        }
-        break;
-
-      case "item.completed":
-        if (event.item.type === "web_search" && event.item.query) {
-          this.emitProgress({
-            type: "web_search",
-            query: event.item.query,
-          });
-        }
-        break;
-    }
-  }
-
-  private emitProgress(event: MonitoringProgressEvent): void {
-    this.emit("progress", event);
-  }
-
 }
 
 export class HoldingNotFoundError extends Error {

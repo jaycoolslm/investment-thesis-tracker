@@ -7,9 +7,7 @@ import {
   WeeklyMonitoringService,
   HoldingNotFoundError,
   NoThesisError,
-  type MonitoringProgressEvent,
 } from "../services/weekly-monitoring.js";
-import { progressEmitter } from "../progress.js";
 
 export const thesesRouter = Router();
 
@@ -37,44 +35,6 @@ thesesRouter.get("/holdings/:id/weekly-logs", async (req, res) => {
   res.json(logs);
 });
 
-// ── GET /api/holdings/:id/weekly-logs/progress (SSE) ─────────────────
-
-thesesRouter.get("/holdings/:id/weekly-logs/progress", (req, res) => {
-  const idResult = z.string().uuid().safeParse(req.params.id);
-  if (!idResult.success) {
-    res.status(400).json({ error: "Invalid holding ID" });
-    return;
-  }
-
-  const holdingId = idResult.data;
-
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-
-  res.flushHeaders();
-
-  function onProgress(event: MonitoringProgressEvent) {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-
-    if (
-      event.type === "complete" ||
-      event.type === "failed" ||
-      event.type === "skipped"
-    ) {
-      setTimeout(() => res.end(), 100);
-    }
-  }
-
-  progressEmitter.on(`monitoring:${holdingId}`, onProgress);
-
-  req.on("close", () => {
-    progressEmitter.off(`monitoring:${holdingId}`, onProgress);
-  });
-});
-
 // ── POST /api/holdings/:id/weekly-logs/trigger ───────────────────────
 
 thesesRouter.post("/holdings/:id/weekly-logs/trigger", async (req, res) => {
@@ -86,10 +46,6 @@ thesesRouter.post("/holdings/:id/weekly-logs/trigger", async (req, res) => {
 
   const holdingId = idResult.data;
   const service = new WeeklyMonitoringService();
-
-  service.on("progress", (event: MonitoringProgressEvent) => {
-    progressEmitter.emit(`monitoring:${holdingId}`, event);
-  });
 
   try {
     const logId = await service.monitorHolding(holdingId);

@@ -103,6 +103,23 @@ export function generateThesis(
   });
 }
 
+export interface GenerationStatus {
+  status: "running" | "complete" | "failed";
+  startedAt: string;
+  events: string[];
+  error?: string;
+}
+
+/** Returns null when no generation is tracked for the holding (404). */
+export async function getGenerationStatus(
+  holdingId: string,
+): Promise<GenerationStatus | null> {
+  const res = await fetch(`/api/holdings/${holdingId}/generation-status`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+
 export function getThesis(holdingId: string): Promise<Thesis> {
   return apiFetch(`/api/holdings/${holdingId}/thesis`);
 }
@@ -183,16 +200,31 @@ export function triggerWeeklyMonitoring(holdingId: string): Promise<WeeklyLog> {
 
 // Batch monitoring
 
+export interface MonitoringFailure {
+  holdingId: string;
+  ticker: string;
+  error: string;
+}
+
 export interface MonitoringBatchStatus {
   weekLabel: string;
   total: number;
   completed: number;
   failed: number;
-  status: "active" | "complete";
+  status: "active" | "complete" | "cancelled";
   startedAt: string;
+  failures?: MonitoringFailure[];
 }
 
-export function triggerMonitoringBatch(): Promise<MonitoringBatchStatus> {
+export interface MonitoringTriggerResult {
+  weekLabel?: string;
+  total?: number;
+  status?: "active";
+  /** Set when there was nothing to monitor this week. */
+  message?: string;
+}
+
+export function triggerMonitoringBatch(): Promise<MonitoringTriggerResult> {
   return apiFetch("/api/monitoring/trigger", { method: "POST" });
 }
 

@@ -20,15 +20,6 @@ vi.mock("../../config.js", () => ({
   },
 }));
 
-// Mock the progress emitter
-vi.mock("../../progress.js", () => ({
-  progressEmitter: {
-    emit: vi.fn(),
-    on: vi.fn(),
-    off: vi.fn(),
-  },
-}));
-
 // Mock drizzle DB
 const mockSelect = vi.fn();
 const mockInsert = vi.fn();
@@ -57,6 +48,9 @@ vi.mock("../../db/index.js", () => ({
 }));
 
 const { createApp } = await import("../../app.js");
+const { clearProgressStore, getGenerationProgress } = await import(
+  "../../services/progress-store.js"
+);
 const app = createApp();
 
 describe("POST /api/holdings/:id/generate", () => {
@@ -64,6 +58,7 @@ describe("POST /api/holdings/:id/generate", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearProgressStore();
   });
 
   it("returns 400 for invalid UUID", async () => {
@@ -124,7 +119,7 @@ describe("POST /api/holdings/:id/generate", () => {
     mockGenerate.mockResolvedValueOnce(VALID_THESIS_FIXTURE);
 
     // Mock: transaction persists and returns thesisId
-    mockTransaction.mockImplementationOnce(async (fn: Function) => {
+    mockTransaction.mockImplementationOnce(async () => {
       return thesisId;
     });
 
@@ -181,5 +176,87 @@ describe("POST /api/holdings/:id/generate", () => {
 
     expect(res.status).toBe(504);
     expect(res.body.error).toContain("timed out");
+  });
+
+  it("records failed progress when the agent throws", async () => {
+    const holdingRow = {
+      id: validUuid,
+      ticker: "AAPL",
+      companyName: "Apple Inc.",
+      direction: "long",
+      benchmark: "S&P 500",
+      status: "active",
+    };
+
+    mockSelect.mockResolvedValueOnce([holdingRow]);
+    mockSelect.mockResolvedValueOnce([]);
+    mockGenerate.mockRejectedValueOnce(new Error("API rate limit"));
+
+    await request(app)
+      .post(`/api/holdings/${validUuid}/generate`)
+      .send({ bullets: "Test bullets" });
+
+    expect(getGenerationProgress(validUuid)?.status).toBe("failed");
+    expect(getGenerationProgress(validUuid)?.error).toBe("API rate limit");
+  });
+});
+
+describe("GET /api/holdings/:id/generation-status", () => {
+  const validUuid = "550e8400-e29b-41d4-a716-446655440000";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearProgressStore();
+  });
+
+  it("returns 400 for invalid UUID", async () => {
+    const res = await request(app).get(
+      "/api/holdings/not-a-uuid/generation-status",
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when no generation is tracked", async () => {
+    const res = await request(app).get(
+      `/api/holdings/${validUuid}/generation-status`,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns complete status with events after a successful generation", async () => {
+    const holdingRow = {
+      id: validUuid,
+      ticker: "AAPL",
+      companyName: "Apple Inc.",
+      direction: "long",
+      benchmark: "S&P 500",
+      status: "active",
+    };
+
+    mockSelect.mockResolvedValueOnce([holdingRow]);
+    mockSelect.mockResolvedValueOnce([]);
+    // Simulate a streamed run: the agent reports a web search via onEvent
+    mockGenerate.mockImplementationOnce(
+      async (_input: unknown, _signal: unknown, onEvent?: Function) => {
+        onEvent?.({
+          type: "item.completed",
+          item: { id: "1", type: "web_search", query: "AAPL earnings" },
+        });
+        return VALID_THESIS_FIXTURE;
+      },
+    );
+    mockTransaction.mockImplementationOnce(async () => "thesis-id");
+
+    await request(app)
+      .post(`/api/holdings/${validUuid}/generate`)
+      .send({ bullets: "Strong growth" });
+
+    const res = await request(app).get(
+      `/api/holdings/${validUuid}/generation-status`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("complete");
+    expect(res.body.events).toEqual(['Searching: "AAPL earnings"']);
+    expect(res.body.startedAt).toBeDefined();
   });
 });

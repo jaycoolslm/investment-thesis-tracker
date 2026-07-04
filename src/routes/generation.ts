@@ -3,9 +3,8 @@ import * as z from "zod";
 import {
   ThesisGenerationService,
   HoldingNotFoundError,
-  type ProgressEvent,
 } from "../services/thesis-generation.js";
-import { progressEmitter } from "../progress.js";
+import { getGenerationProgress } from "../services/progress-store.js";
 
 export const generationRouter = Router();
 
@@ -13,39 +12,21 @@ const generateBodySchema = z.object({
   bullets: z.string().min(1, "At least one thesis bullet is required"),
 });
 
-// SSE endpoint — client opens this BEFORE triggering generation
-generationRouter.get("/holdings/:id/progress", (req, res) => {
+// Polled by the frontend while a generation is running
+generationRouter.get("/holdings/:id/generation-status", (req, res) => {
   const idResult = z.string().uuid().safeParse(req.params.id);
   if (!idResult.success) {
     res.status(400).json({ error: "Invalid holding ID" });
     return;
   }
 
-  const holdingId = idResult.data;
-
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-
-  // Flush headers immediately so EventSource fires onopen
-  res.flushHeaders();
-
-  function onProgress(event: ProgressEvent) {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-
-    if (event.type === "complete" || event.type === "failed") {
-      // Give client a moment to process the final event, then close
-      setTimeout(() => res.end(), 100);
-    }
+  const progress = getGenerationProgress(idResult.data);
+  if (!progress) {
+    res.status(404).json({ error: "No generation in progress" });
+    return;
   }
 
-  progressEmitter.on(holdingId, onProgress);
-
-  req.on("close", () => {
-    progressEmitter.off(holdingId, onProgress);
-  });
+  res.json(progress);
 });
 
 // Generation trigger
@@ -67,11 +48,6 @@ generationRouter.post("/holdings/:id/generate", async (req, res) => {
 
   const holdingId = idResult.data;
   const service = new ThesisGenerationService();
-
-  // Forward progress events to any SSE listeners
-  service.on("progress", (event: ProgressEvent) => {
-    progressEmitter.emit(holdingId, event);
-  });
 
   try {
     const thesisId = await service.generate(holdingId, bodyResult.data.bullets);
