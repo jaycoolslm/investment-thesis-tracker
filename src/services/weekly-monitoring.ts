@@ -142,35 +142,23 @@ export class WeeklyMonitoringService {
     result.indexChangePct = indexChangePct;
     result.relativePerf = relativePerf;
 
-    // 9. Persist in transaction
-    const logId = await db.transaction(async (tx) => {
-      const [log] = await tx
-        .insert(weeklyLogs)
-        .values({
-          holdingId,
-          weekLabel,
-          weekDate,
-          priceChangePct: priceChangePct?.toString(),
-          indexChangePct: indexChangePct?.toString(),
-          relativePerf: relativePerf?.toString(),
-          thesisImpact: result.thesisImpact,
-          summary: result.summary,
-          sources: result.sources,
-        })
-        .returning();
+    // 9. Persist the log (holdings' latest impact is derived at read time)
+    const [log] = await db
+      .insert(weeklyLogs)
+      .values({
+        holdingId,
+        weekLabel,
+        weekDate,
+        priceChangePct: priceChangePct?.toString(),
+        indexChangePct: indexChangePct?.toString(),
+        relativePerf: relativePerf?.toString(),
+        thesisImpact: result.thesisImpact,
+        summary: result.summary,
+        sources: result.sources,
+      })
+      .returning();
 
-      await tx
-        .update(holdings)
-        .set({
-          latestImpact: result.thesisImpact,
-          lastUpdated: new Date(),
-        })
-        .where(eq(holdings.id, holdingId));
-
-      return log.id;
-    });
-
-    return logId;
+    return log.id;
   }
 }
 

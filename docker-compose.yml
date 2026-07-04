@@ -33,13 +33,6 @@ services:
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
       MONITORING_CRON_SCHEDULE: ${MONITORING_CRON_SCHEDULE:-0 6 * * 1}
       MONITORING_CONCURRENCY: ${MONITORING_CONCURRENCY:-10}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      EMAIL_FROM: ${EMAIL_FROM:-}
-      EMAIL_TO: ${EMAIL_TO:-}
-      APP_URL: ${APP_URL:-http://localhost:5173}
     volumes:
       - ./src:/app/src
       - ./package.json:/app/package.json

@@ -100,23 +100,16 @@ export class ThesisGenerationService {
     holdingId: string,
     output: ThesisOutput,
   ): Promise<string> {
-    return await db.transaction(async (tx) => {
-      const [thesis] = await tx
-        .insert(theses)
-        .values({
-          holdingId,
-          content: output.content,
-          sources: output.sources,
-        })
-        .returning();
+    const [thesis] = await db
+      .insert(theses)
+      .values({
+        holdingId,
+        content: output.content,
+        sources: output.sources,
+      })
+      .returning();
 
-      await tx
-        .update(holdings)
-        .set({ lastUpdated: new Date() })
-        .where(eq(holdings.id, holdingId));
-
-      return thesis.id;
-    });
+    return thesis.id;
   }
 }
 
