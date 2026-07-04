@@ -1,6 +1,4 @@
-import ExcelJS from "exceljs";
 import * as z from "zod";
-import { Readable } from "stream";
 
 export interface ValidatedRow {
   rowNumber: number;
@@ -41,78 +39,101 @@ function normalizeHeader(raw: string): string | null {
   return null;
 }
 
-function cellToString(cell: ExcelJS.CellValue): string {
-  if (cell == null) return "";
-  if (typeof cell === "object" && "text" in cell) return String(cell.text);
-  return String(cell).trim();
+/**
+ * Minimal RFC 4180 CSV parser: quoted fields may contain commas, escaped
+ * quotes ("") and newlines; records end on LF, CR or CRLF; a leading BOM is
+ * stripped. Returns one string[] per record, including blank lines (so record
+ * indices map to file line numbers); a trailing newline adds no record.
+ */
+export function parseCsvRecords(input: string): string[][] {
+  const text = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
+  const records: string[][] = [];
+  let record: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"' && field === "") {
+      inQuotes = true;
+    } else if (ch === ",") {
+      record.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      record.push(field);
+      records.push(record);
+      record = [];
+      field = "";
+    } else {
+      field += ch;
+    }
+  }
+
+  if (field !== "" || record.length > 0) {
+    record.push(field);
+    records.push(record);
+  }
+
+  return records;
 }
 
 /**
- * Parse and validate a spreadsheet buffer (.xlsx or .csv).
- * Returns all rows with validation status and per-row errors.
+ * Parse and validate a CSV buffer for bulk upload.
+ * Returns all data rows with validation status and per-row errors.
+ * Row numbers match the file (header = row 1, first data row = row 2).
  */
-export async function parseSpreadsheet(
-  buffer: Buffer,
-  mimeType: string,
-): Promise<ValidatedRow[]> {
-  const workbook = new ExcelJS.Workbook();
+export function parseCsv(buffer: Buffer): ValidatedRow[] {
+  const records = parseCsvRecords(buffer.toString("utf8"));
 
-  if (
-    mimeType ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    mimeType === "application/vnd.ms-excel"
-  ) {
-    // ExcelJS expects ArrayBuffer-like input
-    const arrayBuffer = buffer.buffer.slice(
-      buffer.byteOffset,
-      buffer.byteOffset + buffer.byteLength,
-    );
-    await workbook.xlsx.load(arrayBuffer as ArrayBuffer);
-  } else {
-    // CSV
-    const stream = Readable.from(buffer);
-    await workbook.csv.read(stream);
-  }
-
-  const worksheet = workbook.worksheets[0];
-  if (!worksheet || worksheet.rowCount < 2) {
+  if (records.length < 2) {
     throw new ParseError("File is empty or has no data rows");
   }
 
   // Map header row to column indices
-  const headerRow = worksheet.getRow(1);
   const columnMap: Record<string, number> = {};
-
-  headerRow.eachCell((cell, colNumber) => {
-    const key = normalizeHeader(cellToString(cell.value));
-    if (key) {
-      columnMap[key] = colNumber;
+  records[0].forEach((cell, index) => {
+    const key = normalizeHeader(cell);
+    if (key && !(key in columnMap)) {
+      columnMap[key] = index;
     }
   });
 
-  // Validate required columns
   const missing: string[] = [];
-  if (!columnMap.ticker) missing.push("Ticker");
-  if (!columnMap.direction) missing.push("Direction");
-  if (!columnMap.bullets) missing.push("Thesis Bullets");
+  if (!("ticker" in columnMap)) missing.push("Ticker");
+  if (!("direction" in columnMap)) missing.push("Direction");
+  if (!("bullets" in columnMap)) missing.push("Thesis Bullets");
   if (missing.length > 0) {
     throw new ParseError(`Missing required columns: ${missing.join(", ")}`);
   }
 
-  // Parse data rows
+  const cell = (record: string[], key: string): string =>
+    (record[columnMap[key]] ?? "").trim();
+
   const rows: ValidatedRow[] = [];
 
-  for (let i = 2; i <= worksheet.rowCount; i++) {
-    const row = worksheet.getRow(i);
+  for (let i = 1; i < records.length; i++) {
+    const record = records[i];
+    const rowNumber = i + 1;
 
-    const rawTicker = cellToString(row.getCell(columnMap.ticker).value);
-    const rawDirection = cellToString(row.getCell(columnMap.direction).value);
-    const rawBullets = cellToString(row.getCell(columnMap.bullets).value);
-    const rawCompanyName = columnMap.companyName
-      ? cellToString(row.getCell(columnMap.companyName).value)
-      : null;
+    const rawTicker = cell(record, "ticker");
+    const rawDirection = cell(record, "direction");
+    const rawBullets = cell(record, "bullets");
+    const rawCompanyName =
+      "companyName" in columnMap ? cell(record, "companyName") : null;
 
-    // Skip completely empty rows
+    // Skip completely empty rows (including blank lines)
     if (!rawTicker && !rawDirection && !rawBullets) continue;
 
     const result = rowSchema.safeParse({
@@ -123,7 +144,7 @@ export async function parseSpreadsheet(
 
     if (result.success) {
       rows.push({
-        rowNumber: i,
+        rowNumber,
         ticker: result.data.ticker.toUpperCase(),
         companyName: rawCompanyName || result.data.ticker.toUpperCase(),
         direction: result.data.direction,
@@ -133,7 +154,7 @@ export async function parseSpreadsheet(
       });
     } else {
       rows.push({
-        rowNumber: i,
+        rowNumber,
         ticker: rawTicker || null,
         companyName: rawCompanyName,
         direction: null,

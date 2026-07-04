@@ -9,41 +9,52 @@ import {
   retryBulkGeneration,
 } from "../services/bulk-generation.js";
 import { ParseError } from "../services/file-parser.js";
-import { getTemplateBuffer } from "../services/template-generator.js";
 
 export const bulkRouter = Router();
 
 const MAX_BULK_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-const ALLOWED_MIMETYPES = [
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-excel",
-  "text/csv",
-  "application/csv",
-];
+
+// Extension is the reliable signal: browsers report CSVs with inconsistent
+// mime types (Windows tags them as Excel), so mime checks would misfire.
+const EXCEL_EXTENSIONS = /\.(xls[xmb]?|numbers|ods)$/i;
+const SAVE_AS_CSV_MESSAGE =
+  "Excel files aren't supported. In Excel, choose File → Save As and select CSV (Comma delimited), then upload that file.";
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_BULK_FILE_SIZE },
-  fileFilter: (_req, file, cb) => {
-    cb(null, ALLOWED_MIMETYPES.includes(file.mimetype));
-  },
 });
 
-// POST /api/bulk-generate — Upload file, parse, validate, return preview
+const TEMPLATE_CSV =
+  "Ticker,Company Name,Direction,Thesis Bullets\r\n" +
+  'AAPL,Apple Inc.,Long,"Strong iPhone cycle, growing services revenue, expanding margins from hardware-to-services shift"\r\n';
+
+// POST /api/bulk-generate — Upload CSV, parse, validate, return preview
 bulkRouter.post(
   "/bulk-generate",
   upload.single("file"),
   async (req, res) => {
     if (!req.file) {
       res.status(400).json({
-        error:
-          "No file uploaded. Upload an .xlsx or .csv file.",
+        error: "No file uploaded. Upload a .csv file.",
+      });
+      return;
+    }
+
+    const filename = req.file.originalname ?? "";
+    if (EXCEL_EXTENSIONS.test(filename)) {
+      res.status(400).json({ error: SAVE_AS_CSV_MESSAGE });
+      return;
+    }
+    if (!/\.csv$/i.test(filename)) {
+      res.status(400).json({
+        error: `Only CSV files are supported. ${SAVE_AS_CSV_MESSAGE}`,
       });
       return;
     }
 
     try {
-      const preview = await parseBulkFile(req.file.buffer, req.file.mimetype);
+      const preview = parseBulkFile(req.file.buffer);
       res.json(preview);
     } catch (err) {
       if (err instanceof ParseError) {
@@ -142,16 +153,12 @@ bulkRouter.post("/bulk-generate/:batchId/retry", async (req, res) => {
   });
 });
 
-// GET /api/bulk-generate/template — Download template .xlsx
-bulkRouter.get("/bulk-generate/template", async (_req, res) => {
-  const buffer = await getTemplateBuffer();
-  res.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  );
+// GET /api/bulk-generate/template — Download template CSV
+bulkRouter.get("/bulk-generate/template", (_req, res) => {
+  res.setHeader("Content-Type", "text/csv");
   res.setHeader(
     "Content-Disposition",
-    'attachment; filename="thesis-tracker-template.xlsx"',
+    'attachment; filename="thesis-tracker-template.csv"',
   );
-  res.send(buffer);
+  res.send(TEMPLATE_CSV);
 });

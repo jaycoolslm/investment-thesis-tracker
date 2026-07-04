@@ -9,7 +9,7 @@ import {
   cancelBatch,
   type BatchFailure,
 } from "./batch-runner.js";
-import { parseSpreadsheet, type ValidatedRow } from "./file-parser.js";
+import { parseCsv, type ValidatedRow } from "./file-parser.js";
 
 export interface BatchPreview {
   batchId: string;
@@ -29,12 +29,9 @@ function evictExpiredPreviews(): void {
   }
 }
 
-/** Parse a spreadsheet and return a preview with validation. Caches rows in memory. */
-export async function parseBulkFile(
-  buffer: Buffer,
-  mimeType: string,
-): Promise<BatchPreview> {
-  const rows = await parseSpreadsheet(buffer, mimeType);
+/** Parse a CSV and return a preview with validation. Caches rows in memory. */
+export function parseBulkFile(buffer: Buffer): BatchPreview {
+  const rows = parseCsv(buffer);
   const batchId = randomUUID();
   const validCount = rows.filter((r) => r.valid).length;
   const errorCount = rows.filter((r) => !r.valid).length;
