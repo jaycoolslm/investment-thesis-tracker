@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Phase 3 in progress. A simplification programme is under way (specs 02–03 done): **the thesis is now a single Markdown document**. The old structured encoding — a separate per-section table, `summary`/`quality_assess`/`valuation`/`assumptions`/`risks` columns, the strict multi-field AI output schema, ~200 lines of per-section CRUD, and the seven per-section frontend editors across five tabs — collapsed into one `theses.content` markdown column. `sources` stays structured (weekly monitoring appends to it; the UI lists it separately). The agent now writes a free-form Markdown thesis (`thesisOutputSchema = { content: string≥200, sources }`); migration `0002_markdown_thesis.sql` backfills `content` for any pre-existing thesis (composes one markdown section per old column/table row, stripping legacy rich-text HTML) before dropping the old columns, the old table, and the weekly-log reference column — covered by `src/db/__tests__/migration-backfill.integration.test.ts`, which seeds old-shape rows via raw SQL and runs the migration against them. Frontend: the five tabs collapse to **Thesis | Weekly Log**; the Thesis tab renders `content` with `react-markdown` + `remark-gfm` and an Edit toggle that swaps in a full-height monospace `<textarea>` on the existing debounced `useAutoSave`, followed by the Sources list and `BrokerResearchPanel` (with `BenchmarkEditor` / `StatusEditor` in the header). `ThesisPrintPage` renders the markdown + sources + weekly log. Deleted the seven per-section editors, `SeverityBadge`, and the per-section API routes/mutations. Spec 03 swept the remaining rich-text stack: `EditableText.tsx` (unused after spec 02) deleted, all four rich-text editor packages removed from `web/package.json`, no `dangerouslySetInnerHTML` anywhere — every edit surface is a plain input/textarea on `useAutoSave`. 46 integration tests, 68 unit tests, 27 frontend tests — all green.
+Phase 3 in progress. A simplification programme is under way (specs 02–04 done): **the thesis is now a single Markdown document**. The old structured encoding — a separate per-section table, `summary`/`quality_assess`/`valuation`/`assumptions`/`risks` columns, the strict multi-field AI output schema, ~200 lines of per-section CRUD, and the seven per-section frontend editors across five tabs — collapsed into one `theses.content` markdown column. `sources` stays structured (weekly monitoring appends to it; the UI lists it separately). The agent now writes a free-form Markdown thesis (`thesisOutputSchema = { content: string≥200, sources }`); migration `0002_markdown_thesis.sql` backfills `content` for any pre-existing thesis (composes one markdown section per old column/table row, stripping legacy rich-text HTML) before dropping the old columns, the old table, and the weekly-log reference column — covered by `src/db/__tests__/migration-backfill.integration.test.ts`, which seeds old-shape rows via raw SQL and runs the migration against them. Frontend: the five tabs collapse to **Thesis | Weekly Log**; the Thesis tab renders `content` with `react-markdown` + `remark-gfm` and an Edit toggle that swaps in a full-height monospace `<textarea>` on the existing debounced `useAutoSave`, followed by the Sources list and `BrokerResearchPanel` (with `BenchmarkEditor` / `StatusEditor` in the header). `ThesisPrintPage` renders the markdown + sources + weekly log. Deleted the seven per-section editors, `SeverityBadge`, and the per-section API routes/mutations. Spec 03 swept the remaining rich-text stack: `EditableText.tsx` (unused after spec 02) deleted, all four rich-text editor packages removed from `web/package.json`, no `dangerouslySetInnerHTML` anywhere — every edit surface is a plain input/textarea on `useAutoSave`. Spec 04 removed the queue layer (BullMQ, ioredis, the redis container, two workers, the Redis batch hashes): batch work now runs through `src/services/batch-runner.ts` — a generic in-process worker pool (`runBatch`: per-item retry, cancel flag) plus an in-memory batch registry (`Map<string, BatchState>`), all in one file. Bulk preview rows cache in an in-memory Map (24 h eviction, not Redis's 30 min); `runMonitoringBatch` (still in `src/jobs/scheduler.ts`, wrapped by the unchanged node-cron schedule) selects active holdings with a thesis and *no weekly log for the current week*, which replaces the Redis idempotency lock and makes re-triggering resume a crashed batch for free. `GET /api/monitoring/status` reads the registry, falling back to a `weekly_logs`-derived summary on a fresh process. Single-process completion is race-free, so `batch_complete` + the email digest fire exactly once. **Server-restart story:** in-flight batches die with the process; re-triggering resumes safely because the work is idempotent (monitoring skips holdings already logged this week; bulk retry re-runs failed holdings) — no boot-time auto-resume. The progressEmitter/SSE surface is unchanged (spec 05 replaces it with polling on the registry). 49 integration tests, 78 unit tests, 27 frontend tests, 11 e2e — all green.
 
 Prior state (spec 01 — PDF export via browser print view): "Export PDF" opens `/holdings/:id/print` in a new tab, a chrome-free single-scroll render; `ThesisPrintPage` reuses `useThesis`/`useHolding`/`useWeeklyLogs`, calls `window.print()` on mount and shows a visible "Print / Save as PDF" button. Print pagination lives in an `@media print` block + `@page` margins in `web/src/globals.css` (`break-inside: avoid` on sections/rows, weekly-log `thead` set to `table-header-group`). No server-side PDF rendering. `MOCK_AGENT=true` env var flips `ThesisAgent` and `MarketDataService` to fixtures for E2E/demo. Shared test helpers: `src/__tests__/helpers.ts` (`seedHolding`, `seedHoldingWithThesis`, `seedManyHoldings`, `cleanAllTables`). Note: `modelReasoningEffort` still `"low"` for dev (TODO: bump to high for production).
 
@@ -27,13 +27,13 @@ Read these before making architectural or UX decisions:
 - **Frontend**: React 19 + Vite 8 + TanStack Table + TanStack Query + Tailwind CSS v4 + Radix UI + react-markdown/remark-gfm (thesis rendering)
 - **Database**: PostgreSQL 16 + Drizzle ORM 0.45 (pg driver)
 - **Validation**: Zod v4 (env config, API input, AI output)
-- **Jobs**: BullMQ + Redis (bulk-generation: concurrency 3, 2 retries; weekly-monitoring: concurrency 10, 3 retries)
+- **Jobs**: in-process batch runner (`src/services/batch-runner.ts`, no queue library — bulk: concurrency 3, 1 retry; weekly monitoring: concurrency `MONITORING_CONCURRENCY`, 2 retries)
 - **Scheduling**: node-cron v4 (weekly monitoring cron, configurable via `MONITORING_CRON_SCHEDULE`)
 - **Email**: Nodemailer v8 SMTP (optional — configurable via `SMTP_*` env vars, graceful skip when not set)
 - **AI**: Codex CLI SDK (`@openai/codex-sdk` + `@openai/codex`) → Azure OpenAI (GPT 5.4-mini, web search live, `runStreamed` for progress events)
 - **Market data**: `yahoo-finance2` v3 (weekly price returns for tickers + benchmark indices, no API key needed)
 - **File parsing**: ExcelJS (read/write .xlsx + .csv for bulk upload + template generation)
-- **Containers**: Docker Compose (api + postgres + redis)
+- **Containers**: Docker Compose (api + postgres)
 - **Package manager**: pnpm (separate package.json for root backend + web/ frontend)
 
 ## Architecture Principles
@@ -49,7 +49,7 @@ Read these before making architectural or UX decisions:
 ## Running Locally
 
 ```bash
-docker compose up --build -d   # Start api + postgres + redis
+docker compose up --build -d   # Start api + postgres
 pnpm db:migrate                # Create tables
 pnpm db:seed                   # Insert 3 sample holdings
 cd web && pnpm dev             # Start frontend at http://localhost:5173
@@ -57,13 +57,12 @@ cd web && pnpm dev             # Start frontend at http://localhost:5173
 
 API: http://localhost:3001, Frontend: http://localhost:5173 (proxies /api to Express).
 
-Note: Redis is mapped to host port 6380 (not 6379) to avoid conflicts with other containers.
 
 ## Running Tests
 
 ```bash
-pnpm test                      # Backend unit tests (68 tests, no Docker needed)
-pnpm test:integration          # Backend integration tests (46 tests, needs Docker for Testcontainers)
+pnpm test                      # Backend unit tests (78 tests, no Docker needed)
+pnpm test:integration          # Backend integration tests (49 tests, needs Docker for Testcontainers)
 cd web && pnpm test            # Frontend component tests (27 tests, no Docker needed)
 pnpm test:e2e                  # E2E Playwright tests (11 tests, needs Docker + dev servers)
 ```
@@ -108,16 +107,14 @@ thesis-tracking/
       email.ts                — EmailService: Nodemailer SMTP digest after batch monitoring completes
       email-template.ts       — Pure function buildDigestHtml(): inline-CSS HTML email template
       market-data.ts           — yahoo-finance2 wrapper: weekly returns for tickers + benchmark indices
-      bulk-generation.ts       — Bulk orchestration: parse → cache rows in Redis → create holdings → enqueue
+      batch-runner.ts          — Generic in-process worker pool (runBatch: retry, cancel) + in-memory batch registry
+      bulk-generation.ts       — Bulk orchestration: parse → cache rows in memory → create holdings → runBatch
       file-parser.ts           — ExcelJS .xlsx/.csv parsing + Zod per-row validation
       template-generator.ts    — Generate downloadable .xlsx template with ExcelJS
     jobs/
-      queue.ts                 — BullMQ queues (bulk-generation + weekly-monitoring) + Redis connection + batch helpers
-      bulk-worker.ts           — Worker (concurrency 3): generates theses, tracks batch state in Redis
-      weekly-worker.ts         — Worker (concurrency 10): weekly monitoring per holding, batch progress in Redis
       scheduler.ts             — node-cron scheduler + runMonitoringBatch() (shared by cron + manual trigger)
     __tests__/
-      setup-integration.ts     — Global setup: Testcontainers (Postgres 16 + Redis 7), migration runner
+      setup-integration.ts     — Global setup: Testcontainers (Postgres 16), migration runner
       helpers.ts               — Shared test helpers: seedHolding, seedHoldingWithThesis, seedManyHoldings, cleanAllTables
     db/
       schema.ts                — 4 tables (holdings, theses, weekly_logs, documents) + 3 enums + relations
@@ -217,7 +214,7 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 | S4 | 1 | May 5-9 | Dashboard polish (search/filter/badges) + bulk upload | Done |
 | S5 | 1 | May 12-16 | Integration testing + ship prep + runStreamed migration | Done |
 | S6 | 2 | May 19-23 | Weekly monitoring vertical slice — market data + AI analysis + manual trigger | Done |
-| S7 | 2 | May 26-30 | Scheduled batch monitoring — node-cron + BullMQ + dashboard | Done |
+| S7 | 2 | May 26-30 | Scheduled batch monitoring — node-cron + batch queue (since replaced in-process, spec 04) + dashboard | Done |
 | S8 | 2 | Jun 2-6 | Email digest + polish | Done |
 | S9 | 2 | Jun 9-13 | Test hardening + Phase 3 prep | Done |
 | S10 | 3 | Jun 16-20 | PDF export via browser print view (`/holdings/:id/print`) | Done |
