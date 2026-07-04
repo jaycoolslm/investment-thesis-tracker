@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Phase 3 in progress. A simplification programme is under way (spec 02 done): **the thesis is now a single Markdown document**. The old structured encoding — `thesis_pillars` table, `summary`/`quality_assess`/`valuation`/`assumptions`/`risks` columns, the strict multi-field AI output schema, ~200 lines of pillar CRUD, and the seven per-section frontend editors across five tabs — collapsed into one `theses.content` markdown column. `sources` stays structured (weekly monitoring appends to it; the UI lists it separately). The agent now writes a free-form Markdown thesis (`thesisOutputSchema = { content: string≥200, sources }`); migration `0002_markdown_thesis.sql` backfills `content` for any pre-existing thesis (composes `## Summary` / `## Thesis Pillars` / `## Quality Assessment` / `## Valuation` / `## Key Assumptions` / `## Risks` from the old columns, stripping Tiptap HTML) before dropping them and `weekly_logs.pillar_refs`. Frontend: the five tabs collapse to **Thesis | Weekly Log**; the Thesis tab renders `content` with `react-markdown` + `remark-gfm` and an Edit toggle that swaps in a full-height monospace `<textarea>` on the existing debounced `useAutoSave`, followed by the Sources list and `BrokerResearchPanel` (with `BenchmarkEditor` / `StatusEditor` in the header). `ThesisPrintPage` renders the markdown + sources + weekly log. Deleted the per-section editors (`PillarEditor`, `PillarCard`, `SummaryEditor`, `QualityEditor`, `ValuationEditor`, `AssumptionsEditor`, `RisksEditor`), `SeverityBadge`, and all pillar API/mutations. (Tiptap / `EditableText` remain in the repo but are now unused by the thesis view — spec 03 sweeps rich-text.) 40 integration tests, 68 unit tests, 28 frontend tests — all green.
+Phase 3 in progress. A simplification programme is under way (spec 02 done): **the thesis is now a single Markdown document**. The old structured encoding — a separate per-section table, `summary`/`quality_assess`/`valuation`/`assumptions`/`risks` columns, the strict multi-field AI output schema, ~200 lines of per-section CRUD, and the seven per-section frontend editors across five tabs — collapsed into one `theses.content` markdown column. `sources` stays structured (weekly monitoring appends to it; the UI lists it separately). The agent now writes a free-form Markdown thesis (`thesisOutputSchema = { content: string≥200, sources }`); migration `0002_markdown_thesis.sql` backfills `content` for any pre-existing thesis (composes one markdown section per old column/table row, stripping Tiptap HTML) before dropping the old columns, the old table, and the weekly-log reference column — covered by `src/db/__tests__/migration-backfill.integration.test.ts`, which seeds old-shape rows via raw SQL and runs the migration against them. Frontend: the five tabs collapse to **Thesis | Weekly Log**; the Thesis tab renders `content` with `react-markdown` + `remark-gfm` and an Edit toggle that swaps in a full-height monospace `<textarea>` on the existing debounced `useAutoSave`, followed by the Sources list and `BrokerResearchPanel` (with `BenchmarkEditor` / `StatusEditor` in the header). `ThesisPrintPage` renders the markdown + sources + weekly log. Deleted the seven per-section editors, `SeverityBadge`, and the per-section API routes/mutations. (Tiptap / `EditableText` remain in the repo but are now unused by the thesis view — spec 03 sweeps rich-text.) 46 integration tests, 68 unit tests, 27 frontend tests — all green.
 
 Prior state (spec 01 — PDF export via browser print view): "Export PDF" opens `/holdings/:id/print` in a new tab, a chrome-free single-scroll render; `ThesisPrintPage` reuses `useThesis`/`useHolding`/`useWeeklyLogs`, calls `window.print()` on mount and shows a visible "Print / Save as PDF" button. Print pagination lives in an `@media print` block + `@page` margins in `web/src/globals.css` (`break-inside: avoid` on sections/rows, weekly-log `thead` set to `table-header-group`). No server-side PDF rendering. `MOCK_AGENT=true` env var flips `ThesisAgent` and `MarketDataService` to fixtures for E2E/demo. Shared test helpers: `src/__tests__/helpers.ts` (`seedHolding`, `seedHoldingWithThesis`, `seedManyHoldings`, `cleanAllTables`). Note: `modelReasoningEffort` still `"low"` for dev (TODO: bump to high for production).
 
@@ -12,7 +12,7 @@ Prior state (spec 01 — PDF export via browser print view): "Export PDF" opens 
 
 Read these before making architectural or UX decisions:
 
-- `PRD.md` — Product requirements (v2.1). Pillar-based thesis template, all user stories, acceptance criteria.
+- `PRD.md` — Product requirements (v2.1). All user stories and acceptance criteria. Predates the markdown-thesis simplification, so its structured thesis template is historical.
 - `ARCHITECTURE.md` — Tech architecture (v2.0). Simplified: Codex SDK does web search + file reading natively.
 - `SPRINT-PLAN.md` — Phase 1 (5 sprints) + Phase 2 (Sprints 6-9) sprint plans.
 - `DESIGN-HANDOFF.md` — Developer-ready component specs, design tokens, interaction states.
@@ -41,8 +41,8 @@ Read these before making architectural or UX decisions:
 1. **The Codex agent does the heavy lifting.** Web search, file reading (broker research PDFs), financial analysis — all handled natively by the agent. No vector store, no document parsing pipeline, no search provider abstraction.
 2. **Broker research = save file, pass path to agent.** PDFs/DOCX saved to `/data/documents/{holdingId}/`. The agent reads them directly via its built-in PDF skill.
 3. **No provider abstraction in v1.** A thin `ThesisAgent` wrapper class isolates the SDK from business logic. That's enough. Extract an interface when a second provider is actually needed.
-4. **The thesis is a single Markdown document** (`theses.content`). The agent writes it freely, the manager edits it as raw markdown, and it renders with `react-markdown`. There is no structured pillar/valuation/risk schema — only `content` + a structured `sources` list.
-5. **Weekly logs are append-only structured rows.** They reference the thesis *in prose* (the AI summary names the parts affected); there is no pillar-reference column.
+4. **The thesis is a single Markdown document** (`theses.content`). The agent writes it freely, the manager edits it as raw markdown, and it renders with `react-markdown`. There is no structured per-section schema — only `content` + a structured `sources` list.
+5. **Weekly logs are append-only structured rows.** They reference the thesis *in prose* (the AI summary names the parts affected); there is no structured thesis-reference column.
 6. **Generation progress uses `runStreamed()`.** Real SDK events (web searches, agent_message start) are forwarded via SSE to the frontend. The Codex exec JSONL stream does NOT emit reasoning items — the `ReasoningItem` type exists in the SDK but is never sent. Don't attempt `model_reasoning_summary` config; it has no effect in exec mode.
 7. **`@openai/codex` must be a direct dependency** (not just transitive via `@openai/codex-sdk`). pnpm's strict hoisting prevents the SDK's `require.resolve()` chain from finding the platform-specific binary otherwise. This affects Docker builds.
 
@@ -63,9 +63,9 @@ Note: Redis is mapped to host port 6380 (not 6379) to avoid conflicts with other
 
 ```bash
 pnpm test                      # Backend unit tests (68 tests, no Docker needed)
-pnpm test:integration          # Backend integration tests (40 tests, needs Docker for Testcontainers)
-cd web && pnpm test            # Frontend component tests (28 tests, no Docker needed)
-pnpm test:e2e                  # E2E Playwright tests (9 tests, needs Docker + dev servers)
+pnpm test:integration          # Backend integration tests (46 tests, needs Docker for Testcontainers)
+cd web && pnpm test            # Frontend component tests (27 tests, no Docker needed)
+pnpm test:e2e                  # E2E Playwright tests (11 tests, needs Docker + dev servers)
 ```
 
 `MOCK_AGENT=true` env var — makes `ThesisAgent` and `MarketDataService` return fixture data instead of calling real APIs. Used by E2E tests (set in `playwright.config.ts`) and useful for local demo/development.
@@ -124,6 +124,8 @@ thesis-tracking/
       index.ts                 — Drizzle client
       seed.ts                  — Idempotent seed (3 holdings)
       migrations/              — Drizzle-generated SQL
+      __tests__/
+        migration-backfill.integration.test.ts — Runs 0002 against old-shape rows in a scratch DB, asserts the markdown backfill
   web/
     package.json               — Frontend deps
     vite.config.ts             — React + Tailwind plugins, /api proxy

@@ -96,7 +96,7 @@ export const VALID_WEEKLY_LOG_FIXTURE: WeeklyLogOutput = {
   relativePerf: 2.1,
   thesisImpact: "strengthened",
   summary:
-    "The Services Revenue Flywheel pillar strengthened: Q2 services revenue beat consensus by 8%, confirming the thesis. The key assumption of >15% services growth remains intact — services grew 16% YoY.",
+    "The Services Revenue Flywheel argument strengthened: Q2 services revenue beat consensus by 8%, confirming the thesis. The key assumption of >15% services growth remains intact — services grew 16% YoY.",
   sources: [
     {
       title: "Apple Q2 FY26 Earnings Release",
