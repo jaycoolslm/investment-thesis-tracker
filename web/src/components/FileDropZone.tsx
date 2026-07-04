@@ -4,28 +4,24 @@ interface FileDropZoneProps {
   files: File[];
   onChange: (files: File[]) => void;
   accept?: string;
-  acceptedTypes?: string[];
   maxSize?: number;
   multiple?: boolean;
   dropLabel?: string;
   hintLabel?: string;
+  typeErrorMessage?: string;
 }
 
 const DEFAULT_MAX_SIZE = 50 * 1024 * 1024; // 50 MB
-const DEFAULT_ACCEPTED_TYPES = [
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-];
 
 export function FileDropZone({
   files,
   onChange,
   accept = ".pdf,.docx",
-  acceptedTypes = DEFAULT_ACCEPTED_TYPES,
   maxSize = DEFAULT_MAX_SIZE,
   multiple = true,
   dropLabel = "Drop broker research here, or",
   hintLabel = "PDF or DOCX, up to 50 MB",
+  typeErrorMessage,
 }: FileDropZoneProps) {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +29,20 @@ export function FileDropZone({
 
   const maxSizeMB = Math.round(maxSize / (1024 * 1024));
 
+  // Validate by extension: browsers report inconsistent mime types
+  // (e.g. Windows tags .csv as an Excel type), extensions are reliable.
+  const acceptedExtensions = accept
+    .split(",")
+    .map((ext) => ext.trim().toLowerCase());
+
   function validateAndAdd(incoming: FileList | File[]) {
     const newFiles: File[] = [];
     for (const file of incoming) {
-      if (!acceptedTypes.includes(file.type)) {
-        setError(`Unsupported file type. Accepted: ${accept}`);
+      const name = file.name.toLowerCase();
+      if (!acceptedExtensions.some((ext) => name.endsWith(ext))) {
+        setError(
+          typeErrorMessage ?? `Unsupported file type. Accepted: ${accept}`,
+        );
         return;
       }
       if (file.size > maxSize) {

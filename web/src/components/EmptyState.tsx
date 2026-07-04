@@ -24,7 +24,7 @@ export function EmptyState({ onAddHolding, onBulkUpload }: EmptyStateProps) {
             onClick={onBulkUpload}
             className="border border-brand-200 bg-surface-card hover:bg-brand-100 text-brand-700 text-sm font-medium px-4 py-2 rounded-md focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2 transition-colors"
           >
-            Upload Spreadsheet
+            Upload CSV
           </button>
         )}
       </div>

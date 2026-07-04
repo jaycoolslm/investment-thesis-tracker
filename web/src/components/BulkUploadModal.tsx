@@ -1,16 +1,9 @@
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import clsx from "clsx";
 import { FileDropZone } from "./FileDropZone.tsx";
-import { BulkValidationTable } from "./BulkValidationTable.tsx";
 import { useBulkUpload } from "../hooks/useBulkUpload.ts";
 import { downloadTemplate, type BulkPreviewRow } from "../api/bulk.ts";
-
-const BULK_ACCEPTED_TYPES = [
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-excel",
-  "text/csv",
-  "application/csv",
-];
 
 interface BulkUploadModalProps {
   open: boolean;
@@ -42,26 +35,6 @@ export function BulkUploadModal({
     }
   }
 
-  function handleRemoveRow(rowNumber: number) {
-    setRows((prev) => prev.filter((r) => r.rowNumber !== rowNumber));
-  }
-
-  function handleUpdateRow(rowNumber: number, field: string, value: string) {
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.rowNumber !== rowNumber) return r;
-        const updated = { ...r, [field]: value };
-        // Re-validate: check if all required fields are now present
-        const errors: string[] = [];
-        if (!updated.ticker) errors.push("Missing ticker");
-        if (!updated.direction || !["long", "short"].includes(updated.direction))
-          errors.push("Direction must be Long or Short");
-        if (!updated.bullets) errors.push("No thesis bullets provided");
-        return { ...updated, valid: errors.length === 0, errors };
-      }),
-    );
-  }
-
   function handleGenerate() {
     if (!batchId) return;
     const errorRows = rows.filter((r) => !r.valid).map((r) => r.rowNumber);
@@ -91,14 +64,14 @@ export function BulkUploadModal({
           } max-h-[85vh] overflow-y-auto`}
         >
           <Dialog.Title className="text-lg font-semibold text-brand-900 mb-1">
-            Import Holdings from Spreadsheet
+            Import Holdings from CSV
           </Dialog.Title>
 
           {step === "upload" && (
             <>
               <Dialog.Description className="text-sm text-brand-500 mb-4">
-                Upload an Excel (.xlsx) or CSV file with your holdings. Each row
-                becomes a thesis.
+                Upload a CSV file with your holdings. Each row becomes a
+                thesis. In Excel, use File &rarr; Save As and pick CSV.
                 <br />
                 Required columns: Ticker, Direction (Long or Short), Thesis
                 Bullets
@@ -109,18 +82,18 @@ export function BulkUploadModal({
                 onClick={downloadTemplate}
                 className="text-sm text-accent-600 hover:text-accent-700 font-medium mb-4 block"
               >
-                Download Template
+                Download CSV Template
               </button>
 
               <FileDropZone
                 files={files}
                 onChange={handleFilesChange}
-                accept=".xlsx,.csv"
-                acceptedTypes={BULK_ACCEPTED_TYPES}
+                accept=".csv"
                 maxSize={5 * 1024 * 1024}
                 multiple={false}
-                dropLabel="Drop your spreadsheet here, or"
-                hintLabel="Excel (.xlsx) or CSV, up to 5 MB"
+                dropLabel="Drop your CSV file here, or"
+                hintLabel="CSV only, up to 5 MB (export from Excel with Save As)"
+                typeErrorMessage="Only CSV files are supported. In Excel, choose File → Save As and select CSV, then upload that file."
               />
 
               {uploadMutation.isPending && (
@@ -146,21 +119,68 @@ export function BulkUploadModal({
                   </span>
                 ) : (
                   <span className="text-warning-text">
-                    {rows.length} rows found. {errorCount} need attention.
+                    {rows.length} rows found. {errorCount} with errors will be
+                    skipped.
                     <br />
                     <span className="text-brand-500">
-                      Rows with errors are highlighted. Fix them below or remove
-                      them to continue.
+                      Rows with errors are highlighted below. Continue with the{" "}
+                      {validCount} valid {validCount === 1 ? "row" : "rows"},
+                      or fix the file in your spreadsheet and upload it again.
                     </span>
                   </span>
                 )}
               </Dialog.Description>
 
-              <BulkValidationTable
-                rows={rows}
-                onRemoveRow={handleRemoveRow}
-                onUpdateRow={handleUpdateRow}
-              />
+              <div className="border border-brand-200 rounded-md overflow-hidden max-h-[400px] overflow-y-auto">
+                <table className="w-full">
+                  <thead className="sticky top-0">
+                    <tr className="bg-brand-50 border-b border-brand-200">
+                      {["#", "Ticker", "Direction", "Bullets Preview", "Issue"].map(
+                        (header) => (
+                          <th
+                            key={header}
+                            className="px-3 py-2 text-left text-xs font-medium text-brand-500 uppercase tracking-wider"
+                          >
+                            {header}
+                          </th>
+                        ),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr
+                        key={row.rowNumber}
+                        className={clsx(
+                          "border-b border-brand-100 last:border-b-0",
+                          !row.valid && "bg-error-bg/50",
+                        )}
+                      >
+                        <td className="px-3 py-2 text-sm text-brand-500">
+                          {row.rowNumber}
+                        </td>
+                        <td className="px-3 py-2 text-sm font-medium text-brand-900">
+                          {row.ticker || "--"}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-brand-700 capitalize">
+                          {row.direction || "--"}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className="text-sm text-brand-700 truncate block max-w-[300px]"
+                            title={row.bullets ?? ""}
+                          >
+                            {row.bullets || "--"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-sm text-error-text">
+                          {!row.valid && row.errors.join("; ")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               <div className="flex justify-end gap-3 mt-4">
                 <button
@@ -178,7 +198,7 @@ export function BulkUploadModal({
                     className="bg-accent-600 hover:bg-accent-700 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
                   >
                     {errorCount > 0
-                      ? `Skip Errors and Generate ${validCount}`
+                      ? `Generate ${validCount} valid ${validCount === 1 ? "holding" : "holdings"}`
                       : `Generate All`}
                   </button>
                 )}
