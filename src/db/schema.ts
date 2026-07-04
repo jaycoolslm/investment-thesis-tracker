@@ -32,8 +32,6 @@ export const holdings = pgTable("holdings", {
   direction: directionEnum().notNull(),
   benchmark: varchar({ length: 100 }).notNull().default("S&P 500"),
   status: statusEnum().notNull().default("active"),
-  latestImpact: thesisImpactEnum("latest_impact"),
-  lastUpdated: timestamp("last_updated"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

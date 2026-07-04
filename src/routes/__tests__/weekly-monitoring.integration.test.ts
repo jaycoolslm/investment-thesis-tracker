@@ -87,7 +87,7 @@ describe("Weekly monitoring trigger (integration)", () => {
     expect(res.body.summary).toBeTruthy();
   });
 
-  it("updates holding latestImpact after monitoring", async () => {
+  it("holding latestImpact derives from the new weekly log", async () => {
     const holding = await seedHoldingWithThesis();
 
     mockGetWeeklyReturn.mockResolvedValueOnce(null);
