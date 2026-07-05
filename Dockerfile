@@ -43,6 +43,10 @@ RUN pnpm install --frozen-lockfile
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/web/dist ./web/dist
+COPY drizzle.config.ts ./
+COPY --from=builder /app/src/db/migrations ./src/db/migrations
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 3001
-CMD ["node", "dist/server.js"]
+CMD ["./docker-entrypoint.sh"]
