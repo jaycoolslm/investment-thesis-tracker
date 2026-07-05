@@ -7,7 +7,6 @@ import {
   registerBatch,
   getBatch,
 } from "../services/batch-runner.js";
-import { EmailService } from "../services/email.js";
 import {
   getCurrentWeek,
   WeeklyMonitoringService,
@@ -83,19 +82,11 @@ export async function runMonitoringBatch(): Promise<{
       },
     },
   )
-    .then(async (state) => {
+    .then((state) => {
       if (state.status !== "complete") return;
       console.log(
         `[scheduler] Batch ${weekLabel} finished: ${state.completed}/${state.total} complete, ${state.failed} failed`,
       );
-      // Single-process runner resolves once, so the digest fires exactly once.
-      if (state.completed > 0) {
-        try {
-          await new EmailService().sendWeeklyDigest(weekLabel);
-        } catch (err) {
-          console.error("[email] Failed to send digest:", err);
-        }
-      }
     })
     .catch((err) => {
       console.error(`[scheduler] Batch ${weekLabel} runner crashed:`, err);

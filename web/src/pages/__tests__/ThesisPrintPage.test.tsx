@@ -56,7 +56,10 @@ Strong compounder.
 ### Ecosystem lock-in
 
 Sticky.`,
-  sources: [{ title: "Q1 filing", url: "https://ex.com", type: "filing" }],
+  // Legacy stored sources may still carry a `type` field — must render fine
+  sources: [
+    { title: "Q1 filing", url: "https://ex.com", type: "filing" },
+  ] as unknown as Thesis["sources"],
   createdAt: "2026-04-02T00:00:00Z",
   updatedAt: "2026-04-02T00:00:00Z",
 };

@@ -4,19 +4,8 @@ interface SourcesListProps {
   sources: Source[];
 }
 
-const typeLabels: Record<string, string> = {
-  web: "Web",
-  filing: "Filing",
-  news: "News",
-  broker_research: "Research",
-};
-
 export function SourcesList({ sources }: SourcesListProps) {
-  const webSources = sources.filter(
-    (s) => s.type !== "broker_research",
-  );
-
-  if (webSources.length === 0) {
+  if (sources.length === 0) {
     return (
       <section>
         <h3 className="text-sm font-medium text-brand-500 uppercase tracking-wider mb-3">
@@ -35,13 +24,8 @@ export function SourcesList({ sources }: SourcesListProps) {
         Web Sources
       </h3>
       <ul className="space-y-2">
-        {webSources.map((source, i) => (
+        {sources.map((source, i) => (
           <li key={i} className="flex items-center gap-2 text-sm">
-            {source.type && (
-              <span className="text-xs font-medium text-brand-500 bg-brand-100 px-1.5 py-0.5 rounded">
-                {typeLabels[source.type] ?? source.type}
-              </span>
-            )}
             {source.url ? (
               <a
                 href={source.url}

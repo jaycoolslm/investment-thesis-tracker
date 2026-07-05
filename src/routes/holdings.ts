@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { eq, sql } from "drizzle-orm";
+import { desc, eq, getTableColumns, sql } from "drizzle-orm";
 import * as z from "zod";
 import { db } from "../db/index.js";
-import { holdings } from "../db/schema.js";
+import { holdings, weeklyLogs } from "../db/schema.js";
 
 export const holdingsRouter = Router();
 
@@ -23,6 +23,32 @@ const updateHoldingSchema = z.object({
 
 const uuidSchema = z.string().uuid();
 
+/**
+ * Select holdings with latestImpact / lastUpdated derived from each
+ * holding's most recent weekly log (single round-trip, DISTINCT ON join).
+ * Keeps the response shape the dashboard has always consumed.
+ */
+function selectHoldingsWithDerived() {
+  const latestLogs = db
+    .selectDistinctOn([weeklyLogs.holdingId], {
+      holdingId: weeklyLogs.holdingId,
+      latestImpact: weeklyLogs.thesisImpact,
+      lastUpdated: weeklyLogs.createdAt,
+    })
+    .from(weeklyLogs)
+    .orderBy(weeklyLogs.holdingId, desc(weeklyLogs.weekLabel))
+    .as("latest_logs");
+
+  return db
+    .select({
+      ...getTableColumns(holdings),
+      latestImpact: latestLogs.latestImpact,
+      lastUpdated: latestLogs.lastUpdated,
+    })
+    .from(holdings)
+    .leftJoin(latestLogs, eq(latestLogs.holdingId, holdings.id));
+}
+
 // GET /api/holdings?status=active|closed|paused|all (default: all)
 holdingsRouter.get("/holdings", async (req, res) => {
   const statusParam = z
@@ -32,7 +58,7 @@ holdingsRouter.get("/holdings", async (req, res) => {
 
   const status = statusParam.success ? statusParam.data : "all";
 
-  const query = db.select().from(holdings);
+  const query = selectHoldingsWithDerived();
   const rows =
     status === "all"
       ? await query.orderBy(holdings.ticker)
@@ -82,10 +108,9 @@ holdingsRouter.get("/holdings/:id", async (req, res) => {
     res.status(400).json({ error: "Invalid holding ID" });
     return;
   }
-  const [holding] = await db
-    .select()
-    .from(holdings)
-    .where(eq(holdings.id, idParsed.data));
+  const [holding] = await selectHoldingsWithDerived().where(
+    eq(holdings.id, idParsed.data),
+  );
   if (!holding) {
     res.status(404).json({ error: "Holding not found" });
     return;

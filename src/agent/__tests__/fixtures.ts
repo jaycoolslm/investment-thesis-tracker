@@ -48,17 +48,14 @@ DCF with terminal growth rate of 3%, WACC of 9.5%.
     {
       title: "Apple Q1 FY25 Earnings Release",
       url: "https://investor.apple.com/sec-filings",
-      type: "filing",
     },
     {
       title: "Apple Services Revenue Analysis — Bloomberg Intelligence",
       url: null,
-      type: "web",
     },
     {
       title: "EU Digital Markets Act Impact Assessment",
       url: "https://ec.europa.eu/digital-markets-act",
-      type: "news",
     },
   ],
 };
@@ -101,7 +98,6 @@ export const VALID_WEEKLY_LOG_FIXTURE: WeeklyLogOutput = {
     {
       title: "Apple Q2 FY26 Earnings Release",
       url: "https://investor.apple.com",
-      type: "filing",
     },
   ],
 };

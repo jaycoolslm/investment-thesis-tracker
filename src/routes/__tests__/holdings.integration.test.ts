@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { eq } from "drizzle-orm";
 import request from "supertest";
 import { createApp } from "../../app.js";
 import { db } from "../../db/index.js";
-import { holdings } from "../../db/schema.js";
+import { holdings, weeklyLogs } from "../../db/schema.js";
 
 const app = createApp();
 
@@ -101,6 +102,55 @@ describe("Holdings CRUD (integration)", () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("closed");
     expect(res.body.benchmark).toBe("NASDAQ Composite");
+  });
+
+  it("derives latestImpact/lastUpdated from the most recent weekly log", async () => {
+    const { body: created } = await request(app)
+      .post("/api/holdings")
+      .send({ ticker: "AAPL", companyName: "Apple", direction: "long" });
+
+    // No weekly logs yet — derived fields are null
+    const before = await request(app).get("/api/holdings");
+    expect(before.body[0].latestImpact).toBeNull();
+    expect(before.body[0].lastUpdated).toBeNull();
+
+    // Two logs across different weeks; W20 written after W21 to prove the
+    // derivation follows the week label, not insertion order
+    await db.insert(weeklyLogs).values({
+      holdingId: created.id,
+      weekLabel: "2026-W21",
+      weekDate: "2026-05-18",
+      thesisImpact: "weakened",
+      summary: "Later week",
+    });
+    const [olderLog] = await db
+      .insert(weeklyLogs)
+      .values({
+        holdingId: created.id,
+        weekLabel: "2026-W20",
+        weekDate: "2026-05-11",
+        thesisImpact: "strengthened",
+        summary: "Earlier week",
+      })
+      .returning();
+    expect(olderLog.thesisImpact).toBe("strengthened");
+
+    const [latestLog] = await db
+      .select()
+      .from(weeklyLogs)
+      .where(eq(weeklyLogs.weekLabel, "2026-W21"));
+
+    const listRes = await request(app).get("/api/holdings");
+    expect(listRes.status).toBe(200);
+    expect(listRes.body).toHaveLength(1);
+    expect(listRes.body[0].latestImpact).toBe("weakened");
+    expect(new Date(listRes.body[0].lastUpdated).getTime()).toBe(
+      latestLog.createdAt.getTime(),
+    );
+
+    // Same derivation on the single-holding endpoint
+    const singleRes = await request(app).get(`/api/holdings/${created.id}`);
+    expect(singleRes.body.latestImpact).toBe("weakened");
   });
 
   it("DELETE /api/holdings/:id removes a holding", async () => {

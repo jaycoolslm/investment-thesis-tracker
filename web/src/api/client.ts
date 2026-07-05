@@ -62,10 +62,10 @@ export function deleteHolding(id: string): Promise<void> {
 
 // Thesis types
 
+/** Legacy stored sources may carry an extra `type` field; it is ignored. */
 export interface Source {
   title: string;
   url: string | null;
-  type: "web" | "broker_research" | "filing" | "news" | null;
 }
 
 export interface Thesis {

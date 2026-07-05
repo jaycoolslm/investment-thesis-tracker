@@ -23,8 +23,6 @@ vi.mock("../../config.js", () => ({
 // Mock drizzle DB
 const mockSelect = vi.fn();
 const mockInsert = vi.fn();
-const mockUpdate = vi.fn();
-const mockTransaction = vi.fn();
 
 vi.mock("../../db/index.js", () => ({
   db: {
@@ -38,12 +36,6 @@ vi.mock("../../db/index.js", () => ({
         returning: mockInsert,
       }),
     }),
-    update: () => ({
-      set: () => ({
-        where: mockUpdate,
-      }),
-    }),
-    transaction: mockTransaction,
   },
 }));
 
@@ -118,10 +110,8 @@ describe("POST /api/holdings/:id/generate", () => {
     // Mock: agent returns valid thesis
     mockGenerate.mockResolvedValueOnce(VALID_THESIS_FIXTURE);
 
-    // Mock: transaction persists and returns thesisId
-    mockTransaction.mockImplementationOnce(async () => {
-      return thesisId;
-    });
+    // Mock: insert persists and returns the thesis row
+    mockInsert.mockResolvedValueOnce([{ id: thesisId }]);
 
     const res = await request(app)
       .post(`/api/holdings/${validUuid}/generate`)
@@ -245,7 +235,7 @@ describe("GET /api/holdings/:id/generation-status", () => {
         return VALID_THESIS_FIXTURE;
       },
     );
-    mockTransaction.mockImplementationOnce(async () => "thesis-id");
+    mockInsert.mockResolvedValueOnce([{ id: "thesis-id" }]);
 
     await request(app)
       .post(`/api/holdings/${validUuid}/generate`)
