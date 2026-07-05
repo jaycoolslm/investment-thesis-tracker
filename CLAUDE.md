@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Phase 3 in progress (Sprint 10 done). Phase 2 complete (Sprints 6-9). Phase 1 shipped (Sprints 1-5). Sprint 10 (PDF export): `GET /api/holdings/:id/export/pdf` returns a full thesis PDF via `@react-pdf/renderer` v4.5.1. Server-side TSX enabled by adding `jsx: "react-jsx"` to backend `tsconfig.json`. React 19 installed as a backend runtime dep (peer of react-pdf). Inter (OFL) vendored as WOFF into `src/pdf/fonts/` — registered once at module load in `src/pdf/styles.ts`. Layout mirrors the thesis detail tabs: header → summary → pillars → quality → valuation → assumptions → risks → sources → weekly log (`WeeklyLogTablePdf` with fixed repeating header). Tiptap HTML stripped via a 20-line regex helper (`src/pdf/html-to-text.ts`) rather than a new dep. `yoga-layout` native binary confirmed working on `node:20-alpine`. Route on `src/routes/holdings.ts` reuses the bulk-template response header pattern (`src/routes/bulk.ts:220`). Frontend: "Export PDF" anchor in the thesis detail header uses `window.open` — no fetch+blob needed. 46 integration tests (+4), 85 unit tests (+7), 22 frontend tests — all green. Sprint 9 (test hardening) still authoritative for prior state: fixed Vitest 4 `fileParallelism` issue (deprecated `poolOptions.forks.singleFork` was silently ignored, causing parallel test files to race on shared DB); `MOCK_AGENT=true` env var flips `ThesisAgent` and `MarketDataService` to fixtures for E2E/demo; coverage audit in `TEST-GAPS.md` still flags bulk routes (11%), file-parser (2%), document routes (18%) as the next priorities. Shared test helpers: `src/__tests__/helpers.ts` (`seedHolding`, `seedHoldingWithThesis`, `seedManyHoldings`, `cleanAllTables`). Note: `modelReasoningEffort` still `"low"` for dev (TODO: bump to high for production).
+Phase 3 in progress (Sprint 10 done). Phase 2 complete (Sprints 6-9). Phase 1 shipped (Sprints 1-5). Sprint 10 (PDF export) — reworked to a browser print view (no server-side PDF rendering): "Export PDF" opens `/holdings/:id/print` in a new tab, a chrome-free single-scroll render of the whole thesis (header → summary → pillars → quality → valuation → assumptions → risks → sources → weekly log). `ThesisPrintPage` reuses the `useThesis`/`useHolding`/`useWeeklyLogs` hooks, calls `window.print()` on mount (Save as PDF) and shows a visible "Print / Save as PDF" button. Print pagination lives in an `@media print` block + `@page` margins in `web/src/globals.css` (`break-inside: avoid` on sections/rows, weekly-log `thead` set to `table-header-group` so headers repeat across pages — the weekly log uses a real `<table>`, and status/severity labels are monochrome-safe text). A holding without a thesis shows a "no thesis yet" message. This removed the server-side PDF-rendering path entirely: deleted `src/pdf/`, `src/services/pdf-export.tsx`, the `GET /api/holdings/:id/export/pdf` route and its integration tests; dropped the backend `react`/`react-dom` and the react PDF renderer package deps and the `jsx`/`jsxImportSource` compiler options from the backend `tsconfig.json` (backend has no TSX anymore). 42 integration tests (-4), 78 unit tests, 25 frontend tests (+3 — `ThesisPrintPage`) — all green. Sprint 9 (test hardening) still authoritative for prior state: fixed Vitest 4 `fileParallelism` issue (deprecated `poolOptions.forks.singleFork` was silently ignored, causing parallel test files to race on shared DB); `MOCK_AGENT=true` env var flips `ThesisAgent` and `MarketDataService` to fixtures for E2E/demo; coverage audit in `TEST-GAPS.md` still flags bulk routes (11%), file-parser (2%), document routes (18%) as the next priorities. Shared test helpers: `src/__tests__/helpers.ts` (`seedHolding`, `seedHoldingWithThesis`, `seedManyHoldings`, `cleanAllTables`). Note: `modelReasoningEffort` still `"low"` for dev (TODO: bump to high for production).
 
 ## Key Documents
 
@@ -62,7 +62,7 @@ Note: Redis is mapped to host port 6380 (not 6379) to avoid conflicts with other
 ```bash
 pnpm test                      # Backend unit tests (78 tests, no Docker needed)
 pnpm test:integration          # Backend integration tests (42 tests, needs Docker for Testcontainers)
-cd web && pnpm test            # Frontend component tests (22 tests, no Docker needed)
+cd web && pnpm test            # Frontend component tests (25 tests, no Docker needed)
 pnpm test:e2e                  # E2E Playwright tests (9 tests, needs Docker + dev servers)
 ```
 
@@ -90,7 +90,7 @@ thesis-tracking/
     config.ts                  — Zod-validated env parsing (incl. OpenAI/Azure keys, monitoring schedule/concurrency)
     progress.ts                — EventEmitter singleton for SSE progress events
     routes/
-      holdings.ts              — Holdings CRUD (GET/POST/PUT/DELETE) + GET /:id/export/pdf (PDF download)
+      holdings.ts              — Holdings CRUD (GET/POST/PUT/DELETE)
       generation.ts            — POST /api/holdings/:id/generate + GET /api/holdings/:id/progress (SSE)
       theses.ts                — GET thesis + PATCH thesis + pillar CRUD + reorder
       documents.ts             — POST/GET/DELETE /api/holdings/:id/documents
@@ -106,7 +106,6 @@ thesis-tracking/
       email.ts                — EmailService: Nodemailer SMTP digest after batch monitoring completes
       email-template.ts       — Pure function buildDigestHtml(): inline-CSS HTML email template
       market-data.ts           — yahoo-finance2 wrapper: weekly returns for tickers + benchmark indices
-      pdf-export.tsx           — exportThesisPdf(id): load holding/thesis/pillars/logs + renderToBuffer
       bulk-generation.ts       — Bulk orchestration: parse → cache rows in Redis → create holdings → enqueue
       file-parser.ts           — ExcelJS .xlsx/.csv parsing + Zod per-row validation
       template-generator.ts    — Generate downloadable .xlsx template with ExcelJS
@@ -115,13 +114,6 @@ thesis-tracking/
       bulk-worker.ts           — Worker (concurrency 3): generates theses, tracks batch state in Redis
       weekly-worker.ts         — Worker (concurrency 10): weekly monitoring per holding, batch progress in Redis
       scheduler.ts             — node-cron scheduler + runMonitoringBatch() (shared by cron + manual trigger)
-    pdf/
-      styles.ts                — Design tokens + StyleSheet + Font.register (Inter WOFF)
-      html-to-text.ts          — Tiptap HTML → plain text (regex, no deps)
-      ThesisPdf.tsx            — Root <Document>: header, summary, pillars, quality, valuation, assumptions, risks, sources
-      fonts/                   — Inter-Regular/Medium/Bold.woff (OFL license alongside)
-      components/
-        WeeklyLogTablePdf.tsx  — Flexbox table with fixed repeating header, impact badges, pillar chips
     __tests__/
       setup-integration.ts     — Global setup: Testcontainers (Postgres 16 + Redis 7), migration runner
       helpers.ts               — Shared test helpers: seedHolding, seedHoldingWithThesis, seedManyHoldings, cleanAllTables
@@ -138,11 +130,12 @@ thesis-tracking/
     index.html
     src/
       main.tsx                 — Entry point, QueryClientProvider, BrowserRouter
-      App.tsx                  — React Router routes (Dashboard + ThesisDetailPage)
-      globals.css              — Tailwind v4 @theme tokens (brand, accent, status colours)
+      App.tsx                  — React Router routes (Dashboard + ThesisDetailPage + ThesisPrintPage)
+      globals.css              — Tailwind v4 @theme tokens (brand, accent, status colours) + @media print / @page rules for the print view
       pages/
         Dashboard.tsx           — Holdings list with search, filter chips, loading/empty/error states
         ThesisDetailPage.tsx    — Thesis view: header, 5-tab Radix Tabs, all editors
+        ThesisPrintPage.tsx     — Chrome-free single-scroll print/export view; auto-calls window.print() on load
       components/
         Layout.tsx              — Shared header + Outlet + modals + toasts + bulk + monitoring state management
         HoldingsTable.tsx       — TanStack Table, 7 columns, sorting, globalFilterFn, row click, delete
@@ -232,7 +225,7 @@ Defined in `web/src/globals.css` via Tailwind v4 `@theme` blocks. Use token clas
 | S7 | 2 | May 26-30 | Scheduled batch monitoring — node-cron + BullMQ + dashboard | Done |
 | S8 | 2 | Jun 2-6 | Email digest + polish | Done |
 | S9 | 2 | Jun 9-13 | Test hardening + Phase 3 prep | Done |
-| S10 | 3 | Jun 16-20 | PDF export via `@react-pdf/renderer` | Done |
+| S10 | 3 | Jun 16-20 | PDF export via browser print view (`/holdings/:id/print`) | Done |
 
 ## Git Workflow
 

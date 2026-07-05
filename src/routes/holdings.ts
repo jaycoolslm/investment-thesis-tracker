@@ -3,11 +3,6 @@ import { eq, sql } from "drizzle-orm";
 import * as z from "zod";
 import { db } from "../db/index.js";
 import { holdings } from "../db/schema.js";
-import {
-  exportThesisPdf,
-  HoldingNotFoundError,
-  NoThesisError,
-} from "../services/pdf-export.js";
 
 export const holdingsRouter = Router();
 
@@ -120,42 +115,6 @@ holdingsRouter.put("/holdings/:id", async (req, res) => {
     return;
   }
   res.json(updated);
-});
-
-// GET /api/holdings/:id/export/pdf
-holdingsRouter.get("/holdings/:id/export/pdf", async (req, res) => {
-  const idParsed = uuidSchema.safeParse(req.params.id);
-  if (!idParsed.success) {
-    res.status(400).json({ error: "Invalid holding ID" });
-    return;
-  }
-
-  try {
-    const { buffer, filename } = await exportThesisPdf(idParsed.data);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${filename}"`,
-    );
-    res.setHeader("Content-Length", buffer.length);
-    res.send(buffer);
-  } catch (err) {
-    if (err instanceof HoldingNotFoundError) {
-      res.status(404).json({ error: "Holding not found" });
-      return;
-    }
-    if (err instanceof NoThesisError) {
-      res.status(409).json({
-        error: "No thesis exists for this holding. Generate a thesis first.",
-      });
-      return;
-    }
-    console.error("[pdf-export] Error for holding", idParsed.data, err);
-    res.status(500).json({
-      error: "PDF export failed",
-      message: err instanceof Error ? err.message : "Unknown error",
-    });
-  }
 });
 
 // DELETE /api/holdings/:id
