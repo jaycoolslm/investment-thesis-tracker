@@ -6,7 +6,7 @@
 ALTER TABLE "theses" ADD COLUMN "content" text;--> statement-breakpoint
 
 -- 2. Crude HTML→text helper: turn paragraph/line breaks into newlines, strip all
---    remaining tags, then trim. Good enough to rescue Tiptap-authored fields.
+--    remaining tags, then trim. Good enough to rescue legacy rich-text HTML fields.
 CREATE OR REPLACE FUNCTION "__strip_html"(t text) RETURNS text AS $$
   SELECT trim(both E' \n' FROM regexp_replace(
     regexp_replace(coalesce(t, ''), '</p>|<br\s*/?>', E'\n', 'gi'),
