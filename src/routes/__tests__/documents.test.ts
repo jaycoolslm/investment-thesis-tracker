@@ -11,11 +11,6 @@ vi.mock("../../config.js", () => ({
   },
 }));
 
-// Mock the progress emitter
-vi.mock("../../progress.js", () => ({
-  progressEmitter: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },
-}));
-
 // Mock the agent
 vi.mock("../../agent/codex-agent.js", () => ({
   ThesisAgent: class MockThesisAgent {

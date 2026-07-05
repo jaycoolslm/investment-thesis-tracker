@@ -27,6 +27,24 @@ export interface BulkFailure {
   error: string;
 }
 
+export interface BulkBatchStatus {
+  total: number;
+  completed: number;
+  failed: number;
+  status: "active" | "complete" | "cancelled";
+  failures: BulkFailure[];
+  startedAt: string;
+}
+
+export async function getBulkStatus(batchId: string): Promise<BulkBatchStatus> {
+  const res = await fetch(`/api/bulk-generate/${batchId}/status`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Status failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function uploadBulkFile(file: File): Promise<BulkPreview> {
   const formData = new FormData();
   formData.append("file", file);

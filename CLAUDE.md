@@ -4,7 +4,7 @@ AI-powered investment thesis generation and weekly monitoring tool for fund mana
 
 ## Project Status
 
-Phase 3 in progress. A simplification programme is under way (specs 02–04 done): **the thesis is now a single Markdown document**. The old structured encoding — a separate per-section table, `summary`/`quality_assess`/`valuation`/`assumptions`/`risks` columns, the strict multi-field AI output schema, ~200 lines of per-section CRUD, and the seven per-section frontend editors across five tabs — collapsed into one `theses.content` markdown column. `sources` stays structured (weekly monitoring appends to it; the UI lists it separately). The agent now writes a free-form Markdown thesis (`thesisOutputSchema = { content: string≥200, sources }`); migration `0002_markdown_thesis.sql` backfills `content` for any pre-existing thesis (composes one markdown section per old column/table row, stripping legacy rich-text HTML) before dropping the old columns, the old table, and the weekly-log reference column — covered by `src/db/__tests__/migration-backfill.integration.test.ts`, which seeds old-shape rows via raw SQL and runs the migration against them. Frontend: the five tabs collapse to **Thesis | Weekly Log**; the Thesis tab renders `content` with `react-markdown` + `remark-gfm` and an Edit toggle that swaps in a full-height monospace `<textarea>` on the existing debounced `useAutoSave`, followed by the Sources list and `BrokerResearchPanel` (with `BenchmarkEditor` / `StatusEditor` in the header). `ThesisPrintPage` renders the markdown + sources + weekly log. Deleted the seven per-section editors, `SeverityBadge`, and the per-section API routes/mutations. Spec 03 swept the remaining rich-text stack: `EditableText.tsx` (unused after spec 02) deleted, all four rich-text editor packages removed from `web/package.json`, no `dangerouslySetInnerHTML` anywhere — every edit surface is a plain input/textarea on `useAutoSave`. Spec 04 removed the queue layer (BullMQ, ioredis, the redis container, two workers, the Redis batch hashes): batch work now runs through `src/services/batch-runner.ts` — a generic in-process worker pool (`runBatch`: per-item retry, cancel flag) plus an in-memory batch registry (`Map<string, BatchState>`), all in one file. Bulk preview rows cache in an in-memory Map (24 h eviction, not Redis's 30 min); `runMonitoringBatch` (still in `src/jobs/scheduler.ts`, wrapped by the unchanged node-cron schedule) selects active holdings with a thesis and *no weekly log for the current week*, which replaces the Redis idempotency lock and makes re-triggering resume a crashed batch for free. `GET /api/monitoring/status` reads the registry, falling back to a `weekly_logs`-derived summary on a fresh process. Single-process completion is race-free, so `batch_complete` + the email digest fire exactly once. **Server-restart story:** in-flight batches die with the process; re-triggering resumes safely because the work is idempotent (monitoring skips holdings already logged this week; bulk retry re-runs failed holdings) — no boot-time auto-resume. The progressEmitter/SSE surface is unchanged (spec 05 replaces it with polling on the registry). 49 integration tests, 78 unit tests, 27 frontend tests, 11 e2e — all green.
+Phase 3 in progress. A simplification programme is under way (specs 02–05 done): **the thesis is now a single Markdown document**. The old structured encoding — a separate per-section table, `summary`/`quality_assess`/`valuation`/`assumptions`/`risks` columns, the strict multi-field AI output schema, ~200 lines of per-section CRUD, and the seven per-section frontend editors across five tabs — collapsed into one `theses.content` markdown column. `sources` stays structured (weekly monitoring appends to it; the UI lists it separately). The agent now writes a free-form Markdown thesis (`thesisOutputSchema = { content: string≥200, sources }`); migration `0002_markdown_thesis.sql` backfills `content` for any pre-existing thesis (composes one markdown section per old column/table row, stripping legacy rich-text HTML) before dropping the old columns, the old table, and the weekly-log reference column — covered by `src/db/__tests__/migration-backfill.integration.test.ts`, which seeds old-shape rows via raw SQL and runs the migration against them. Frontend: the five tabs collapse to **Thesis | Weekly Log**; the Thesis tab renders `content` with `react-markdown` + `remark-gfm` and an Edit toggle that swaps in a full-height monospace `<textarea>` on the existing debounced `useAutoSave`, followed by the Sources list and `BrokerResearchPanel` (with `BenchmarkEditor` / `StatusEditor` in the header). `ThesisPrintPage` renders the markdown + sources + weekly log. Deleted the seven per-section editors, `SeverityBadge`, and the per-section API routes/mutations. Spec 03 swept the remaining rich-text stack: `EditableText.tsx` (unused after spec 02) deleted, all four rich-text editor packages removed from `web/package.json`, no `dangerouslySetInnerHTML` anywhere — every edit surface is a plain input/textarea on `useAutoSave`. Spec 04 removed the queue layer (BullMQ, ioredis, the redis container, two workers, the Redis batch hashes): batch work now runs through `src/services/batch-runner.ts` — a generic in-process worker pool (`runBatch`: per-item retry, cancel flag) plus an in-memory batch registry (`Map<string, BatchState>`), all in one file. Bulk preview rows cache in an in-memory Map (24 h eviction, not Redis's 30 min); `runMonitoringBatch` (still in `src/jobs/scheduler.ts`, wrapped by the unchanged node-cron schedule) selects active holdings with a thesis and *no weekly log for the current week*, which replaces the Redis idempotency lock and makes re-triggering resume a crashed batch for free. `GET /api/monitoring/status` reads the registry, falling back to a `weekly_logs`-derived summary on a fresh process. Single-process completion is race-free, so the email digest fires exactly once (now directly from the scheduler's completion handler). **Server-restart story:** in-flight batches die with the process; re-triggering resumes safely because the work is idempotent (monitoring skips holdings already logged this week; bulk retry re-runs failed holdings) — no boot-time auto-resume. Spec 05 replaced all SSE with polling: `src/progress.ts` (the progressEmitter singleton), the four SSE endpoints, and every frontend `EventSource` are gone. Generation progress lives in `src/services/progress-store.ts` (in-memory per-holding `{ status, startedAt, events[] }`, events capped at 50, finished entries evicted after 10 min), written by `ThesisGenerationService` and served by `GET /api/holdings/:id/generation-status`; bulk polls `GET /api/bulk-generate/:batchId/status` (registry-backed, includes `failures` + `startedAt`); monitoring polls the existing `GET /api/monitoring/status` (now includes `failures`). The three frontend progress hooks are TanStack Query polls (`refetchInterval: 2000` while active, off when idle/complete — no polling when nothing runs); ETA derives from the server-side `startedAt` + counts. An in-flight generation is stored in `sessionStorage`, so reloading mid-generation resumes the progress modal (behaviour SSE lost); the per-holding weekly trigger relies on plain mutation pending state. In `MOCK_AGENT` mode the agent emits synthetic web-search events (~3.5 s per generation) so e2e can exercise the polled activity feed. 49 integration tests, 89 unit tests, 33 frontend tests, 14 e2e — all green.
 
 Prior state (spec 01 — PDF export via browser print view): "Export PDF" opens `/holdings/:id/print` in a new tab, a chrome-free single-scroll render; `ThesisPrintPage` reuses `useThesis`/`useHolding`/`useWeeklyLogs`, calls `window.print()` on mount and shows a visible "Print / Save as PDF" button. Print pagination lives in an `@media print` block + `@page` margins in `web/src/globals.css` (`break-inside: avoid` on sections/rows, weekly-log `thead` set to `table-header-group`). No server-side PDF rendering. `MOCK_AGENT=true` env var flips `ThesisAgent` and `MarketDataService` to fixtures for E2E/demo. Shared test helpers: `src/__tests__/helpers.ts` (`seedHolding`, `seedHoldingWithThesis`, `seedManyHoldings`, `cleanAllTables`). Note: `modelReasoningEffort` still `"low"` for dev (TODO: bump to high for production).
 
@@ -43,7 +43,7 @@ Read these before making architectural or UX decisions:
 3. **No provider abstraction in v1.** A thin `ThesisAgent` wrapper class isolates the SDK from business logic. That's enough. Extract an interface when a second provider is actually needed.
 4. **The thesis is a single Markdown document** (`theses.content`). The agent writes it freely, the manager edits it as raw markdown, and it renders with `react-markdown`. There is no structured per-section schema — only `content` + a structured `sources` list.
 5. **Weekly logs are append-only structured rows.** They reference the thesis *in prose* (the AI summary names the parts affected); there is no structured thesis-reference column.
-6. **Generation progress uses `runStreamed()`.** Real SDK events (web searches, agent_message start) are forwarded via SSE to the frontend. The Codex exec JSONL stream does NOT emit reasoning items — the `ReasoningItem` type exists in the SDK but is never sent. Don't attempt `model_reasoning_summary` config; it has no effect in exec mode.
+6. **Generation progress uses `runStreamed()` + polling.** Real SDK events (web searches, agent_message start) are appended as activity lines to the in-memory progress store; the frontend polls `GET /api/holdings/:id/generation-status` (TanStack Query, 2 s interval while running). No SSE/WebSockets anywhere. The Codex exec JSONL stream does NOT emit reasoning items — the `ReasoningItem` type exists in the SDK but is never sent. Don't attempt `model_reasoning_summary` config; it has no effect in exec mode.
 7. **`@openai/codex` must be a direct dependency** (not just transitive via `@openai/codex-sdk`). pnpm's strict hoisting prevents the SDK's `require.resolve()` chain from finding the platform-specific binary otherwise. This affects Docker builds.
 
 ## Running Locally
@@ -61,10 +61,10 @@ API: http://localhost:3001, Frontend: http://localhost:5173 (proxies /api to Exp
 ## Running Tests
 
 ```bash
-pnpm test                      # Backend unit tests (78 tests, no Docker needed)
+pnpm test                      # Backend unit tests (89 tests, no Docker needed)
 pnpm test:integration          # Backend integration tests (49 tests, needs Docker for Testcontainers)
-cd web && pnpm test            # Frontend component tests (27 tests, no Docker needed)
-pnpm test:e2e                  # E2E Playwright tests (11 tests, needs Docker + dev servers)
+cd web && pnpm test            # Frontend component tests (33 tests, no Docker needed)
+pnpm test:e2e                  # E2E Playwright tests (14 tests, needs Docker + dev servers)
 ```
 
 `MOCK_AGENT=true` env var — makes `ThesisAgent` and `MarketDataService` return fixture data instead of calling real APIs. Used by E2E tests (set in `playwright.config.ts`) and useful for local demo/development.
@@ -89,14 +89,13 @@ thesis-tracking/
     server.ts                  — Express server entry point
     app.ts                     — Express app factory (testable without listen)
     config.ts                  — Zod-validated env parsing (incl. OpenAI/Azure keys, monitoring schedule/concurrency)
-    progress.ts                — EventEmitter singleton for SSE progress events
     routes/
       holdings.ts              — Holdings CRUD (GET/POST/PUT/DELETE)
-      generation.ts            — POST /api/holdings/:id/generate + GET /api/holdings/:id/progress (SSE)
+      generation.ts            — POST /api/holdings/:id/generate + GET /api/holdings/:id/generation-status (polled)
       theses.ts                — GET thesis + PATCH thesis content (weekly-logs endpoints live here too)
       documents.ts             — POST/GET/DELETE /api/holdings/:id/documents
-      bulk.ts                  — Bulk upload: parse/preview, start, SSE progress, cancel, retry, template
-      monitoring.ts            — Batch monitoring: POST trigger, GET status, GET progress (SSE), GET history
+      bulk.ts                  — Bulk upload: parse/preview, start, GET status (polled), cancel, retry, template
+      monitoring.ts            — Batch monitoring: POST trigger, GET status (polled), GET history
     agent/
       codex-agent.ts           — ThesisAgent: generateThesis() + analyseWeekly() wrapping @openai/codex-sdk
       prompts.ts               — buildGenerationPrompt() + buildWeeklyPrompt() + input interfaces
@@ -108,6 +107,7 @@ thesis-tracking/
       email-template.ts       — Pure function buildDigestHtml(): inline-CSS HTML email template
       market-data.ts           — yahoo-finance2 wrapper: weekly returns for tickers + benchmark indices
       batch-runner.ts          — Generic in-process worker pool (runBatch: retry, cancel) + in-memory batch registry
+      progress-store.ts        — In-memory generation progress (status + activity lines, polled by the frontend)
       bulk-generation.ts       — Bulk orchestration: parse → cache rows in memory → create holdings → runBatch
       file-parser.ts           — ExcelJS .xlsx/.csv parsing + Zod per-row validation
       template-generator.ts    — Generate downloadable .xlsx template with ExcelJS
@@ -147,7 +147,7 @@ thesis-tracking/
         BulkValidationTable.tsx — TanStack Table preview with inline editing for error rows
         BulkProgressBanner.tsx  — Reusable progress banner with ETA, optional cancel + label (bulk + monitoring)
         BulkResultsModal.tsx    — Post-completion: failure table with per-row retry
-        GenerationProgress.tsx  — Live activity feed (SSE-driven): web search queries + "Compiling thesis..." step
+        GenerationProgress.tsx  — Live activity feed (polled): web search queries + "Compiling thesis..." step
         MonitoringHistory.tsx    — Past monitoring batch runs table (week, counts, impact breakdown)
         ErrorFallback.tsx       — React error boundary fallback UI
         FileDropZone.tsx        — Configurable drag-and-drop upload zone (PDF/DOCX or XLSX/CSV)
@@ -171,13 +171,13 @@ thesis-tracking/
         useDocuments.ts         — useDocuments, useUploadDocument, useDeleteDocument
         useAutoSave.ts          — Debounced save with status tracking
         useGenerateThesis.ts    — Mutation: create holding → upload files
-        useGenerationProgress.ts — SSE progress: live activity log from runStreamed events
+        useGenerationProgress.ts — Fires generation + polls generation-status for the live activity feed
         useWeeklyLogs.ts        — TanStack Query: weekly logs for a holding
         useWeeklyMonitoring.ts  — Mutation: trigger weekly monitoring for a holding
         useBulkUpload.ts        — TanStack Query mutation for bulk file upload
-        useBulkProgress.ts      — SSE subscription for bulk generation progress + ETA
+        useBulkProgress.ts      — Polls bulk batch status for progress + ETA (also exports formatEta)
         useBulkRetry.ts         — Mutation for retrying failed bulk holdings
-        useMonitoringProgress.ts — SSE subscription for batch monitoring progress + ETA
+        useMonitoringProgress.ts — Polls /api/monitoring/status while a batch is active (progress + ETA)
         useMonitoringStatus.ts  — TanStack Query: detect active monitoring batch on page load
         useMonitoringHistory.ts — TanStack Query: past batch run summaries
         useToast.ts             — Toast state management

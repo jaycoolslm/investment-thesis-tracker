@@ -2,12 +2,12 @@ import cron, { type ScheduledTask } from "node-cron";
 import { and, eq, notExists } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { holdings, theses, weeklyLogs } from "../db/schema.js";
-import { progressEmitter } from "../progress.js";
 import {
   runBatch,
   registerBatch,
   getBatch,
 } from "../services/batch-runner.js";
+import { EmailService } from "../services/email.js";
 import {
   getCurrentWeek,
   WeeklyMonitoringService,
@@ -66,7 +66,6 @@ export async function runMonitoringBatch(): Promise<{
   }
 
   registerBatch(batchId, "monitoring", pending.length);
-  const eventKey = monitoringBatchId(weekLabel);
 
   const done = runBatch(
     batchId,
@@ -75,64 +74,28 @@ export async function runMonitoringBatch(): Promise<{
       const service = new WeeklyMonitoringService();
       const logId = await service.monitorHolding(item.holdingId);
       console.log(`[scheduler] SUCCESS ${item.ticker} — logId=${logId}`);
-      progressEmitter.emit(eventKey, {
-        type: "holding_complete",
-        holdingId: item.holdingId,
-        ticker: item.ticker,
-        logId,
-      });
     },
     {
       concurrency: config.MONITORING_CONCURRENCY,
       retries: 2,
-      onItemDone: (item) => {
-        const state = getBatch(batchId)!;
-        progressEmitter.emit(eventKey, {
-          type: "progress",
-          completed: state.completed,
-          failed: state.failed,
-          total: state.total,
-          currentTicker: item.ticker,
-        });
-      },
       onItemFailed: (item, error) => {
         console.error(`[scheduler] FAILED ${item.ticker} — ${error}`);
-        const state = getBatch(batchId)!;
-        progressEmitter.emit(eventKey, {
-          type: "holding_failed",
-          holdingId: item.holdingId,
-          ticker: item.ticker,
-          error,
-        });
-        progressEmitter.emit(eventKey, {
-          type: "progress",
-          completed: state.completed,
-          failed: state.failed,
-          total: state.total,
-          currentTicker: item.ticker,
-        });
       },
     },
   )
-    .then((state) => {
+    .then(async (state) => {
       if (state.status !== "complete") return;
       console.log(
         `[scheduler] Batch ${weekLabel} finished: ${state.completed}/${state.total} complete, ${state.failed} failed`,
       );
-      // Single-process runner resolves once, so these fire exactly once.
-      progressEmitter.emit(eventKey, {
-        type: "batch_complete",
-        completed: state.completed,
-        failed: state.failed,
-        total: state.total,
-        failures: state.failures,
-      });
-      progressEmitter.emit("monitoring:digest", {
-        weekLabel,
-        completed: state.completed,
-        failed: state.failed,
-        total: state.total,
-      });
+      // Single-process runner resolves once, so the digest fires exactly once.
+      if (state.completed > 0) {
+        try {
+          await new EmailService().sendWeeklyDigest(weekLabel);
+        } catch (err) {
+          console.error("[email] Failed to send digest:", err);
+        }
+      }
     })
     .catch((err) => {
       console.error(`[scheduler] Batch ${weekLabel} runner crashed:`, err);

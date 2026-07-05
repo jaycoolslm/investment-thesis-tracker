@@ -1,25 +1,20 @@
-import { EventEmitter } from "events";
 import { eq } from "drizzle-orm";
 import type { ThreadEvent } from "@openai/codex-sdk";
 import { db } from "../db/index.js";
 import { holdings, theses, documents } from "../db/schema.js";
 import { ThesisAgent } from "../agent/codex-agent.js";
 import { type ThesisOutput } from "../agent/schemas.js";
+import {
+  startGeneration,
+  appendGenerationEvent,
+  finishGeneration,
+} from "./progress-store.js";
 import path from "node:path";
 
-export type ProgressEvent =
-  | { type: "started" }
-  | { type: "web_search"; query: string }
-  | { type: "file_read"; path: string }
-  | { type: "activity"; message: string }
-  | { type: "complete" }
-  | { type: "failed"; error: string };
-
-export class ThesisGenerationService extends EventEmitter {
+export class ThesisGenerationService {
   private agent: ThesisAgent;
 
   constructor(agent?: ThesisAgent) {
-    super();
     this.agent = agent ?? new ThesisAgent();
   }
 
@@ -34,7 +29,7 @@ export class ThesisGenerationService extends EventEmitter {
       throw new HoldingNotFoundError(holdingId);
     }
 
-    this.emitProgress({ type: "started" });
+    startGeneration(holdingId);
 
     // 2. Fetch uploaded documents
     const docs = await db
@@ -56,59 +51,49 @@ export class ThesisGenerationService extends EventEmitter {
           researchFilePaths: filePaths,
         },
         AbortSignal.timeout(900_000),
-        (event) => this.handleAgentEvent(event),
+        (event) => this.handleAgentEvent(holdingId, event),
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      this.emitProgress({ type: "failed", error: message });
+      finishGeneration(holdingId, "failed", message);
       throw err;
     }
 
     // 4. Persist in transaction
     const thesisId = await this.persistThesis(holdingId, result);
 
-    this.emitProgress({ type: "complete" });
+    finishGeneration(holdingId, "complete");
 
     return thesisId;
   }
 
   private lastWebSearchCompleted = false;
 
-  private handleAgentEvent(event: ThreadEvent): void {
+  private handleAgentEvent(holdingId: string, event: ThreadEvent): void {
     switch (event.type) {
       case "item.started":
         if (event.item.type === "file_change") {
           const filePath = event.item.changes?.[0]?.path;
           if (filePath) {
-            this.emitProgress({
-              type: "file_read",
-              path: path.basename(filePath),
-            });
+            appendGenerationEvent(
+              holdingId,
+              `Reading: ${path.basename(filePath)}`,
+            );
           }
         }
         // When agent_message starts after searches, the model is compiling
         if (event.item.type === "agent_message" && this.lastWebSearchCompleted) {
-          this.emitProgress({
-            type: "activity",
-            message: "Compiling thesis...",
-          });
+          appendGenerationEvent(holdingId, "Compiling thesis...");
         }
         break;
 
       case "item.completed":
         if (event.item.type === "web_search" && event.item.query) {
           this.lastWebSearchCompleted = true;
-          this.emitProgress({
-            type: "web_search",
-            query: event.item.query,
-          });
+          appendGenerationEvent(holdingId, `Searching: "${event.item.query}"`);
         }
         break;
     }
-  }
-
-  private emitProgress(event: ProgressEvent): void {
-    this.emit("progress", event);
   }
 
   private async persistThesis(

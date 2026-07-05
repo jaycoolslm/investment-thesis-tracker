@@ -56,8 +56,21 @@ export class ThesisAgent {
     onEvent?: (event: ThreadEvent) => void,
   ): Promise<ThesisOutput> {
     if (IS_MOCK) {
-      // Return fixture data with a small delay to simulate AI processing
-      await new Promise((r) => setTimeout(r, 200));
+      // Simulate a short streamed run so the polled activity feed is exercised
+      const queries = [
+        `${input.ticker} latest earnings`,
+        `${input.ticker} analyst price targets`,
+        `${input.ticker} competitive landscape`,
+        `${input.ticker} valuation multiples`,
+        `${input.ticker} recent news`,
+      ];
+      for (const query of queries) {
+        await new Promise((r) => setTimeout(r, 700));
+        onEvent?.({
+          type: "item.completed",
+          item: { id: query, type: "web_search", query },
+        } as ThreadEvent);
+      }
       const { VALID_THESIS_FIXTURE } = await import("./__tests__/fixtures.js");
       return VALID_THESIS_FIXTURE;
     }

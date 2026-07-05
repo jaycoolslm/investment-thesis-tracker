@@ -1,7 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
 import * as z from "zod";
-import { progressEmitter } from "../progress.js";
 import {
   parseBulkFile,
   startBulkGeneration,
@@ -88,46 +87,14 @@ bulkRouter.post("/bulk-generate/:batchId/start", async (req, res) => {
   }
 });
 
-// GET /api/bulk-generate/:batchId/progress — SSE stream
-bulkRouter.get("/bulk-generate/:batchId/progress", async (req, res) => {
-  const batchId = req.params.batchId;
-
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-  res.flushHeaders();
-
-  // Send current state immediately on connect
-  const state = getBatchState(batchId);
-  if (state) {
-    res.write(
-      `data: ${JSON.stringify({ type: "progress", completed: state.completed, failed: state.failed, total: state.total })}\n\n`,
-    );
-
-    if (state.status === "complete" || state.status === "cancelled") {
-      res.write(
-        `data: ${JSON.stringify({ type: "batch_complete", ...state })}\n\n`,
-      );
-      setTimeout(() => res.end(), 100);
-      return;
-    }
+// GET /api/bulk-generate/:batchId/status — polled by the frontend while a batch runs
+bulkRouter.get("/bulk-generate/:batchId/status", (req, res) => {
+  const state = getBatchState(req.params.batchId);
+  if (!state) {
+    res.status(404).json({ error: "Batch not found" });
+    return;
   }
-
-  function onEvent(event: Record<string, unknown>) {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-
-    if (event.type === "batch_complete") {
-      setTimeout(() => res.end(), 100);
-    }
-  }
-
-  progressEmitter.on(batchId, onEvent);
-
-  req.on("close", () => {
-    progressEmitter.off(batchId, onEvent);
-  });
+  res.json(state);
 });
 
 // DELETE /api/bulk-generate/:batchId — Cancel remaining jobs
@@ -141,16 +108,6 @@ bulkRouter.delete("/bulk-generate/:batchId", async (req, res) => {
   }
 
   const cancelled = cancelBulkGeneration(batchId);
-
-  // Emit completion so SSE clients close
-  progressEmitter.emit(batchId, {
-    type: "batch_complete",
-    completed: state.completed,
-    failed: state.failed + cancelled,
-    total: state.total,
-    failures: state.failures,
-    cancelled: true,
-  });
 
   res.json({ cancelled, alreadyCompleted: state.completed });
 });
