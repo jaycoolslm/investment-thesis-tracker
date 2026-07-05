@@ -176,4 +176,33 @@ describe("WeeklyLogTable", () => {
     expect(screen.getByText("+3.20%")).toBeInTheDocument();
     expect(screen.getByText("-2.50%")).toBeInTheDocument();
   });
+
+  it("expands a row to reveal the full summary on toggle", async () => {
+    const user = userEvent.setup();
+    const longSummary =
+      "The company posted record revenue this quarter, driven by strong demand " +
+      "in its cloud segment, expanding margins, and disciplined cost control. " +
+      "Management raised full-year guidance, reinforcing the growth thesis.";
+
+    renderTable({ logs: [createLog({ summary: longSummary })] });
+
+    // Full summary is not shown until the row is expanded
+    expect(screen.queryByText("Full summary")).not.toBeInTheDocument();
+
+    const toggle = screen.getByRole("button", { name: /show full summary/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(toggle);
+
+    // Detail row now reveals the full summary text
+    expect(screen.getByText("Full summary")).toBeInTheDocument();
+    expect(screen.getAllByText(longSummary).length).toBeGreaterThan(0);
+
+    const collapse = screen.getByRole("button", { name: /hide full summary/i });
+    expect(collapse).toHaveAttribute("aria-expanded", "true");
+
+    // Collapsing hides the detail row again
+    await user.click(collapse);
+    expect(screen.queryByText("Full summary")).not.toBeInTheDocument();
+  });
 });

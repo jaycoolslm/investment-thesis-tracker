@@ -2,11 +2,13 @@ import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
+  getExpandedRowModel,
   flexRender,
   createColumnHelper,
   type SortingState,
+  type ExpandedState,
 } from "@tanstack/react-table";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import clsx from "clsx";
 import type { WeeklyLog } from "../../api/client.ts";
 import { useTriggerWeeklyMonitoring } from "../../hooks/useWeeklyMonitoring.ts";
@@ -46,6 +48,38 @@ function impactClass(impact: string | null): string {
 }
 
 const columns = [
+  columnHelper.display({
+    id: "expander",
+    header: () => <span className="sr-only">Expand row</span>,
+    cell: ({ row }) => {
+      const expanded = row.getIsExpanded();
+      return (
+        <button
+          type="button"
+          onClick={row.getToggleExpandedHandler()}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Hide full summary" : "Show full summary"}
+          className="flex items-center justify-center h-6 w-6 rounded text-brand-400 hover:text-brand-700 hover:bg-brand-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 transition-colors"
+        >
+          <svg
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className={clsx(
+              "h-4 w-4 transition-transform",
+              expanded && "rotate-90",
+            )}
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M7.21 5.23a.75.75 0 011.06.02l4 4.25a.75.75 0 010 1.02l-4 4.25a.75.75 0 11-1.08-1.04L10.71 10 7.19 6.27a.75.75 0 01.02-1.04z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
+      );
+    },
+  }),
   columnHelper.accessor("weekLabel", {
     header: "Week",
     cell: (info) => info.getValue() ?? "\u2014",
@@ -107,16 +141,20 @@ export function WeeklyLogTable({
   hasThesis,
 }: WeeklyLogTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
   const trigger = useTriggerWeeklyMonitoring(holdingId);
   const { addToast } = useToast();
 
   const table = useReactTable({
     data: logs,
     columns,
-    state: { sorting },
+    state: { sorting, expanded },
     onSortingChange: setSorting,
+    onExpandedChange: setExpanded,
+    getRowCanExpand: () => true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
   });
 
   function handleTrigger() {
@@ -211,19 +249,31 @@ export function WeeklyLogTable({
             </thead>
             <tbody>
               {table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-brand-100 last:border-0 hover:bg-brand-50 transition-colors"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </td>
-                  ))}
-                </tr>
+                <Fragment key={row.id}>
+                  <tr className="border-b border-brand-100 last:border-0 hover:bg-brand-50 transition-colors">
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-4 py-3 align-top">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                  {row.getIsExpanded() && (
+                    <tr className="border-b border-brand-100 last:border-0 bg-brand-50">
+                      <td className="px-4 py-3" aria-hidden="true" />
+                      <td colSpan={row.getVisibleCells().length - 1} className="px-4 py-3">
+                        <p className="text-xs font-medium text-brand-500 uppercase tracking-wider mb-1">
+                          Full summary
+                        </p>
+                        <p className="text-sm text-brand-700 whitespace-pre-wrap">
+                          {row.original.summary ?? "—"}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

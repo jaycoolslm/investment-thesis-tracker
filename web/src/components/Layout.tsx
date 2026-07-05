@@ -52,7 +52,7 @@ export function Layout() {
   const [bulkBatchId, setBulkBatchId] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
   const bulkProgress = useBulkProgress(
-    bulkStep === "generating" ? bulkBatchId : null,
+    bulkStep === "generating" || bulkStep === "complete" ? bulkBatchId : null,
   );
   const retryMutation = useBulkRetry();
 
