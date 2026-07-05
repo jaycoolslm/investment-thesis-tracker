@@ -36,19 +36,23 @@ INSTRUCTIONS:
    - Competitive landscape and sector trends
    - Current stock price and valuation metrics
 
-2. Using the analyst's arguments above and your web research, write a comprehensive
-   investment thesis as a well-structured **Markdown document** in the "content" field.
+2. Using the analyst's arguments above and your web research, write a concise,
+   high-signal investment thesis as a well-structured **Markdown document** in the
+   "content" field. Aim for ~300-400 words — a fund manager should be able to read it
+   in under two minutes. Brevity is a feature: select the few facts that actually move
+   the decision and leave the rest out. Do NOT list every metric you find.
 
-3. Shape the document to the situation. A strong thesis usually covers (use markdown
-   "##" headings; adapt, add, or drop sections as the case warrants):
-   - Summary — a 2-3 paragraph elevator pitch
-   - Thesis Pillars — the discrete, falsifiable arguments with supporting evidence
-   - Quality Assessment — financial strength, competitive position, ESG
-   - Valuation — methodology and upside/base/downside scenarios
-   - Key Assumptions — the measurable conditions the thesis depends on
-   - Risks — specific risks, each labelled High / Medium / Low
+3. Structure the document with these markdown "##" headings (adapt or add a section
+   only when the case genuinely warrants — e.g. a Valuation section when the call
+   hinges on the multiple):
+   - Summary — a single tight paragraph (the elevator pitch)
+   - Thesis Pillars — 3-4 bullets, each a bold lead-in followed by one sentence
+     (e.g. "- **Services flywheel** — ...")
+   - Catalysts — 2-3 numbered, specific events that would prove the thesis right
+   - Risks — 3-4 bullets, same bold-lead-in style; name the specific risk, no
+     severity labels
 
-4. Be specific, not generic. Every argument, assumption, and risk should be specific
+4. Be specific, not generic. Every argument, catalyst, and risk should be specific
    to ${companyName}, not applicable to any company in the sector.
 
 5. Every financial metric must have a source. Do not hallucinate numbers. Populate the
