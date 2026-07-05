@@ -176,11 +176,18 @@ test.describe("Monitoring flow (E2E)", () => {
       expect(logs[0].thesisImpact).toBeTruthy();
     }
 
-    // Navigate to dashboard and verify all show impact badges
+    // Navigate to dashboard and verify each seeded holding shows an impact
+    // badge. (Other spec files run in parallel workers against the same DB,
+    // so assert per-ticker rather than on the total row count.)
     await page.goto("/");
     await page.waitForSelector("tbody tr");
 
-    const rows = page.locator("tbody tr");
-    expect(await rows.count()).toBe(3);
+    for (const ticker of ["AAPL", "MSFT", "GOOG"]) {
+      const row = page.locator("tbody tr", { hasText: ticker }).first();
+      await expect(row).toBeVisible();
+      await expect(
+        row.getByText(/strengthened|weakened|unchanged/i),
+      ).toBeVisible();
+    }
   });
 });

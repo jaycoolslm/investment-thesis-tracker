@@ -143,9 +143,8 @@ describe("ThesisAgent", () => {
 
     const result = await agent.generateThesis(VALID_GENERATION_INPUT);
 
-    expect(result.summary).toBe(VALID_THESIS_FIXTURE.summary);
-    expect(result.pillars).toHaveLength(3);
-    expect(result.risks).toHaveLength(3);
+    expect(result.content).toBe(VALID_THESIS_FIXTURE.content);
+    expect(result.sources).toHaveLength(3);
   });
 
   it("forwards events to onEvent callback", async () => {
@@ -177,12 +176,7 @@ describe("ThesisAgent", () => {
     mockRunStreamed.mockImplementationOnce(() =>
       mockRunStreamedResult(
         JSON.stringify({
-          summary: "Short",
-          pillars: [],
-          qualityAssessment: "",
-          valuation: {},
-          assumptions: [],
-          risks: [],
+          content: "Too short",
           sources: [],
         }),
       ),
@@ -260,7 +254,7 @@ describe("ThesisAgent.analyseWeekly", () => {
     );
   });
 
-  it("calls runStreamed with prompt containing pillar titles", async () => {
+  it("calls runStreamed with prompt containing the thesis content", async () => {
     mockRunStreamed.mockImplementationOnce(() =>
       mockRunStreamedResult(JSON.stringify(VALID_WEEKLY_LOG_FIXTURE)),
     );
@@ -284,7 +278,7 @@ describe("ThesisAgent.analyseWeekly", () => {
 
     expect(result.thesisImpact).toBe("strengthened");
     expect(result.weekLabel).toBe("2026-W21");
-    expect(result.pillarRefs).toHaveLength(2);
+    expect(result.summary).toBeTruthy();
   });
 
   it("forwards events to onEvent callback", async () => {
@@ -326,7 +320,6 @@ describe("ThesisAgent.analyseWeekly", () => {
           weekDate: "invalid",
           thesisImpact: "bad",
           summary: "",
-          pillarRefs: [],
           sources: [],
         }),
       ),

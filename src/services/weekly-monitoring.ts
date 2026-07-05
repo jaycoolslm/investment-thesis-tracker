@@ -3,13 +3,7 @@ import { eq, and, desc } from "drizzle-orm";
 import type { ThreadEvent } from "@openai/codex-sdk";
 import path from "node:path";
 import { db } from "../db/index.js";
-import {
-  holdings,
-  theses,
-  thesisPillars,
-  weeklyLogs,
-  documents,
-} from "../db/schema.js";
+import { holdings, theses, weeklyLogs, documents } from "../db/schema.js";
 import { ThesisAgent } from "../agent/codex-agent.js";
 import { MarketDataService } from "./market-data.js";
 import type { WeeklyAnalysisInput } from "../agent/prompts.js";
@@ -108,7 +102,7 @@ export class WeeklyMonitoringService extends EventEmitter {
 
     this.emitProgress({ type: "started" });
 
-    // 4. Load latest thesis + pillars
+    // 4. Load latest thesis
     const [thesis] = await db
       .select()
       .from(theses)
@@ -121,12 +115,6 @@ export class WeeklyMonitoringService extends EventEmitter {
       this.emitProgress({ type: "failed", error: error.message });
       throw error;
     }
-
-    const pillars = await db
-      .select()
-      .from(thesisPillars)
-      .where(eq(thesisPillars.thesisId, thesis.id))
-      .orderBy(thesisPillars.sortOrder);
 
     // 5. Load broker research file paths
     const docs = await db
@@ -161,18 +149,7 @@ export class WeeklyMonitoringService extends EventEmitter {
       companyName: holding.companyName,
       direction: holding.direction,
       benchmarkIndex: holding.benchmark,
-      thesisSummary: thesis.summary ?? "",
-      pillars: pillars.map((p) => ({
-        id: p.id,
-        title: p.title,
-        body: p.body,
-      })),
-      assumptions: (thesis.assumptions as string[]) ?? [],
-      risks:
-        (thesis.risks as Array<{
-          description: string;
-          severity: string;
-        }>) ?? [],
+      thesisContent: thesis.content ?? "",
       researchFilePaths: docs.map((d) => d.filePath),
       priceData: { priceChangePct, indexChangePct, relativePerf },
       weekLabel,
@@ -210,7 +187,6 @@ export class WeeklyMonitoringService extends EventEmitter {
           relativePerf: relativePerf?.toString(),
           thesisImpact: result.thesisImpact,
           summary: result.summary,
-          pillarRefs: result.pillarRefs,
           sources: result.sources,
         })
         .returning();

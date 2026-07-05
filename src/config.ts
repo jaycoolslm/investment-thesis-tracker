@@ -12,7 +12,11 @@ const envSchema = z.object({
   MONITORING_CRON_SCHEDULE: z.string().default("0 6 * * 1"),
   MONITORING_CONCURRENCY: z.coerce.number().int().positive().default(10),
   SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().positive().optional(),
+  SMTP_PORT: z.preprocess(
+    // docker-compose passes SMTP_PORT="" when unset; treat empty as absent
+    (v) => (v === "" ? undefined : v),
+    z.coerce.number().int().positive().optional(),
+  ),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().optional(),

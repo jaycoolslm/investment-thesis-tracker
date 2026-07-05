@@ -2,7 +2,7 @@ import { EventEmitter } from "events";
 import { eq } from "drizzle-orm";
 import type { ThreadEvent } from "@openai/codex-sdk";
 import { db } from "../db/index.js";
-import { holdings, theses, thesisPillars, documents } from "../db/schema.js";
+import { holdings, theses, documents } from "../db/schema.js";
 import { ThesisAgent } from "../agent/codex-agent.js";
 import { type ThesisOutput } from "../agent/schemas.js";
 import path from "node:path";
@@ -120,25 +120,10 @@ export class ThesisGenerationService extends EventEmitter {
         .insert(theses)
         .values({
           holdingId,
-          summary: output.summary,
-          qualityAssess: output.qualityAssessment,
-          valuation: output.valuation,
-          assumptions: output.assumptions,
-          risks: output.risks,
+          content: output.content,
           sources: output.sources,
         })
         .returning();
-
-      if (output.pillars.length > 0) {
-        await tx.insert(thesisPillars).values(
-          output.pillars.map((p, i) => ({
-            thesisId: thesis.id,
-            title: p.title,
-            body: p.body,
-            sortOrder: i,
-          })),
-        );
-      }
 
       await tx
         .update(holdings)

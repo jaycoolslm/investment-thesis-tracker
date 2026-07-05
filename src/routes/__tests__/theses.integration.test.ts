@@ -2,15 +2,22 @@ import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import { createApp } from "../../app.js";
 import { db } from "../../db/index.js";
-import { holdings, theses, thesisPillars } from "../../db/schema.js";
+import { holdings, theses } from "../../db/schema.js";
 
 const app = createApp();
 
 let holdingId: string;
 let thesisId: string;
 
+const INITIAL_CONTENT = `## Summary
+
+Test thesis summary — a durable compounder with a widening moat.
+
+## Risks
+
+- **Medium:** Competition intensifies.`;
+
 beforeEach(async () => {
-  await db.delete(thesisPillars);
   await db.delete(theses);
   await db.delete(holdings);
 
@@ -29,108 +36,50 @@ beforeEach(async () => {
     .insert(theses)
     .values({
       holdingId: holding.id,
-      summary: "Test thesis summary.",
-      qualityAssess: "Strong financials.",
-      assumptions: ["Revenue grows 10%"],
-      risks: [{ description: "Competition", severity: "medium" }],
+      content: INITIAL_CONTENT,
+      sources: [{ title: "Q1 filing", url: null, type: "filing" }],
     })
     .returning();
   thesisId = thesis.id;
 });
 
 describe("Thesis editing (integration)", () => {
-  it("GET /api/holdings/:id/thesis returns thesis with pillars", async () => {
-    // Add pillars
-    await db.insert(thesisPillars).values([
-      { thesisId, title: "Pillar A", body: "Body A", sortOrder: 0 },
-      { thesisId, title: "Pillar B", body: "Body B", sortOrder: 1 },
-    ]);
-
+  it("GET /api/holdings/:id/thesis returns the markdown thesis", async () => {
     const res = await request(app).get(`/api/holdings/${holdingId}/thesis`);
     expect(res.status).toBe(200);
-    expect(res.body.summary).toBe("Test thesis summary.");
-    expect(res.body.pillars).toHaveLength(2);
-    expect(res.body.pillars[0].title).toBe("Pillar A");
+    expect(res.body.content).toBe(INITIAL_CONTENT);
+    expect(res.body.sources).toHaveLength(1);
+    // The old structured columns no longer leak through
+    expect(res.body.summary).toBeUndefined();
+    expect(res.body.valuation).toBeUndefined();
   });
 
-  it("PATCH /api/theses/:id updates thesis fields", async () => {
+  it("PATCH /api/theses/:id updates the content", async () => {
     const res = await request(app)
       .patch(`/api/theses/${thesisId}`)
-      .send({ summary: "Updated summary", assumptions: ["New assumption"] });
+      .send({ content: "## Summary\n\nUpdated thesis document." });
 
     expect(res.status).toBe(200);
-    expect(res.body.summary).toBe("Updated summary");
-    expect(res.body.assumptions).toEqual(["New assumption"]);
+    expect(res.body.content).toBe("## Summary\n\nUpdated thesis document.");
   });
 
-  it("POST /api/theses/:id/pillars creates a pillar", async () => {
+  it("PATCH /api/theses/:id rejects empty content", async () => {
     const res = await request(app)
-      .post(`/api/theses/${thesisId}/pillars`)
-      .send({ title: "New Pillar", body: "Pillar body text" });
+      .patch(`/api/theses/${thesisId}`)
+      .send({ content: "" });
 
-    expect(res.status).toBe(201);
-    expect(res.body.title).toBe("New Pillar");
-    expect(res.body.thesisId).toBe(thesisId);
+    expect(res.status).toBe(400);
   });
 
-  it("PATCH /api/theses/:id/pillars/:pid updates a pillar", async () => {
-    const { body: pillar } = await request(app)
-      .post(`/api/theses/${thesisId}/pillars`)
-      .send({ title: "Original", body: "Original body" });
+  it("PATCH /api/theses/:id rejects a request with no content field", async () => {
+    const res = await request(app).patch(`/api/theses/${thesisId}`).send({});
 
-    const res = await request(app)
-      .patch(`/api/theses/${thesisId}/pillars/${pillar.id}`)
-      .send({ title: "Edited" });
-
-    expect(res.status).toBe(200);
-    expect(res.body.title).toBe("Edited");
+    expect(res.status).toBe(400);
   });
 
-  it("PATCH /api/theses/:id/pillars/reorder reorders pillars", async () => {
-    const { body: p1 } = await request(app)
-      .post(`/api/theses/${thesisId}/pillars`)
-      .send({ title: "First" });
-    const { body: p2 } = await request(app)
-      .post(`/api/theses/${thesisId}/pillars`)
-      .send({ title: "Second" });
-
-    const res = await request(app)
-      .patch(`/api/theses/${thesisId}/pillars/reorder`)
-      .send({ pillarIds: [p2.id, p1.id] });
-
-    expect(res.status).toBe(200);
-    expect(res.body[0].title).toBe("Second");
-    expect(res.body[1].title).toBe("First");
-  });
-
-  it("DELETE /api/theses/:id/pillars/:pid removes a pillar", async () => {
-    const { body: pillar } = await request(app)
-      .post(`/api/theses/${thesisId}/pillars`)
-      .send({ title: "To Delete" });
-
-    const res = await request(app).delete(
-      `/api/theses/${thesisId}/pillars/${pillar.id}`,
-    );
-    expect(res.status).toBe(204);
-
-    // Verify gone
-    const thesisRes = await request(app).get(
-      `/api/holdings/${holdingId}/thesis`,
-    );
-    const pillarIds = thesisRes.body.pillars.map(
-      (p: { id: string }) => p.id,
-    );
-    expect(pillarIds).not.toContain(pillar.id);
-  });
-
-  it("cascade delete: removing holding deletes thesis and pillars", async () => {
-    await request(app)
-      .post(`/api/theses/${thesisId}/pillars`)
-      .send({ title: "Cascade test" });
-
+  it("cascade delete: removing holding deletes the thesis", async () => {
     await request(app).delete(`/api/holdings/${holdingId}`);
 
-    // Thesis should be gone
     const thesisRes = await request(app).get(
       `/api/holdings/${holdingId}/thesis`,
     );

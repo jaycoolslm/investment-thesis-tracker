@@ -1,5 +1,19 @@
 import { db } from "../db/index.js";
-import { holdings, theses, thesisPillars, weeklyLogs, documents } from "../db/schema.js";
+import { holdings, theses, weeklyLogs, documents } from "../db/schema.js";
+
+const SAMPLE_CONTENT = `## Summary
+
+A durable compounder with a widening moat and disciplined capital allocation.
+
+## Thesis Pillars
+
+### Growth Thesis
+
+Revenue expanding at a double-digit clip with margin leverage.
+
+## Risks
+
+- **Medium:** Competition intensifies in the core market.`;
 
 /** Create a single holding via direct DB insert. */
 export async function seedHolding(
@@ -24,7 +38,7 @@ export async function seedHolding(
   return holding;
 }
 
-/** Create a holding with a thesis and pillars via direct DB insert. */
+/** Create a holding with a markdown thesis via direct DB insert. */
 export async function seedHoldingWithThesis(
   overrides: Partial<{
     ticker: string;
@@ -39,21 +53,9 @@ export async function seedHoldingWithThesis(
     .insert(theses)
     .values({
       holdingId: holding.id,
-      summary: `Test thesis for ${holding.ticker}`,
-      qualityAssess: "Strong fundamentals.",
-      assumptions: ["Revenue grows 10%"],
-      risks: [{ description: "Competition", severity: "medium" }],
+      content: `# Thesis for ${holding.ticker}\n\n${SAMPLE_CONTENT}`,
     })
     .returning();
-
-  await db.insert(thesisPillars).values([
-    {
-      thesisId: thesis.id,
-      title: "Growth Thesis",
-      body: "Revenue expanding.",
-      sortOrder: 0,
-    },
-  ]);
 
   return { holding, thesis };
 }
@@ -80,7 +82,7 @@ export async function seedManyHoldings(count: number) {
       .values(
         holdingRows.map((h) => ({
           holdingId: h.id,
-          summary: `Thesis for ${h.ticker}`,
+          content: `## Summary\n\nThesis for ${h.ticker}.`,
         })),
       )
       .returning();
@@ -93,7 +95,6 @@ export async function seedManyHoldings(count: number) {
 export async function cleanAllTables() {
   await db.delete(documents);
   await db.delete(weeklyLogs);
-  await db.delete(thesisPillars);
   await db.delete(theses);
   await db.delete(holdings);
 }

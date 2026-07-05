@@ -47,23 +47,18 @@ const holding: Holding = {
 const thesis: Thesis = {
   id: "t-1",
   holdingId: "h-1",
-  summary: "<p>Strong compounder.</p>",
-  qualityAssess: "<p>High quality franchise.</p>",
-  valuation: {
-    methodology: "DCF",
-    currentPrice: 190.5,
-    upsideCase: "$250",
-    baseCase: "$210",
-    downsideCase: "$150",
-  },
-  assumptions: ["Services keeps growing"],
-  risks: [{ description: "Regulatory pressure", severity: "medium" }],
+  content: `## Summary
+
+Strong compounder.
+
+## Thesis Pillars
+
+### Ecosystem lock-in
+
+Sticky.`,
   sources: [{ title: "Q1 filing", url: "https://ex.com", type: "filing" }],
   createdAt: "2026-04-02T00:00:00Z",
   updatedAt: "2026-04-02T00:00:00Z",
-  pillars: [
-    { id: "p-1", thesisId: "t-1", title: "Ecosystem lock-in", body: "<p>Sticky.</p>", sortOrder: 0, createdAt: "", updatedAt: "" },
-  ],
 };
 
 const log: WeeklyLog = {
@@ -76,7 +71,6 @@ const log: WeeklyLog = {
   relativePerf: "2.10",
   thesisImpact: "strengthened",
   summary: "Earnings beat.",
-  pillarRefs: null,
   sources: null,
   createdAt: "2026-04-17T00:00:00Z",
 };
@@ -90,25 +84,24 @@ beforeEach(() => {
 });
 
 describe("ThesisPrintPage", () => {
-  it("renders every main section from mocked query data", () => {
+  it("renders the markdown thesis, sources, and weekly log from mocked query data", () => {
     renderPage();
 
     const heading = (name: string) =>
       screen.getByRole("heading", { name });
     expect(heading("AAPL")).toBeInTheDocument();
     expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
-    expect(heading("Summary")).toBeInTheDocument();
-    expect(heading("Thesis Pillars")).toBeInTheDocument();
-    expect(screen.getByText("Ecosystem lock-in")).toBeInTheDocument();
-    expect(heading("Quality Assessment")).toBeInTheDocument();
-    expect(heading("Valuation")).toBeInTheDocument();
-    expect(heading("Assumptions")).toBeInTheDocument();
-    expect(screen.getByText("Services keeps growing")).toBeInTheDocument();
-    expect(heading("Risks")).toBeInTheDocument();
-    expect(screen.getByText("Regulatory pressure")).toBeInTheDocument();
+    // Section wrapper headings
+    expect(heading("Thesis")).toBeInTheDocument();
     expect(heading("Sources")).toBeInTheDocument();
-    expect(screen.getByText("Q1 filing")).toBeInTheDocument();
     expect(heading("Weekly Log")).toBeInTheDocument();
+    // Markdown rendered as real headings, never raw "##"
+    expect(heading("Summary")).toBeInTheDocument();
+    expect(heading("Ecosystem lock-in")).toBeInTheDocument();
+    expect(screen.getByText("Strong compounder.")).toBeInTheDocument();
+    expect(screen.queryByText(/##/)).not.toBeInTheDocument();
+    // Sources + weekly log
+    expect(screen.getByText("Q1 filing")).toBeInTheDocument();
     expect(screen.getByText("Earnings beat.")).toBeInTheDocument();
   });
 

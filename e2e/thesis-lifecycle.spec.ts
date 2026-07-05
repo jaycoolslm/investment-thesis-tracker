@@ -24,9 +24,12 @@ test.describe("Thesis lifecycle", () => {
 
     await page.getByRole("button", { name: /add holding/i }).click();
 
-    // Modal should appear with form fields
-    await expect(page.getByLabel(/ticker/i)).toBeVisible();
-    await expect(page.getByText(/direction/i).first()).toBeVisible();
+    // Modal should appear with form fields (scoped to the dialog — the
+    // dashboard search box also mentions "ticker" in its label)
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByLabel(/ticker/i)).toBeVisible();
+    await expect(dialog.getByText(/position/i).first()).toBeVisible();
+    await expect(dialog.getByRole("radio", { name: /long/i })).toBeVisible();
   });
 
   test("thesis detail page shows tabs", async ({ page }) => {
@@ -39,13 +42,8 @@ test.describe("Thesis lifecycle", () => {
     if (rowCount > 0) {
       await rows.first().click();
 
-      // Should see thesis tabs
-      await expect(page.getByRole("tab", { name: /summary/i })).toBeVisible();
-      await expect(page.getByRole("tab", { name: /quality/i })).toBeVisible();
-      await expect(
-        page.getByRole("tab", { name: /assumptions/i }),
-      ).toBeVisible();
-      await expect(page.getByRole("tab", { name: /sources/i })).toBeVisible();
+      // Should see the two thesis tabs
+      await expect(page.getByRole("tab", { name: /thesis/i })).toBeVisible();
       await expect(
         page.getByRole("tab", { name: /weekly log/i }),
       ).toBeVisible();

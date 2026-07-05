@@ -1,6 +1,6 @@
 # Thesis Tracker
 
-AI-powered investment thesis generation and weekly monitoring for fund managers. Generate a structured, pillar-based thesis from a ticker + a few bullets, upload broker research, and get a weekly automated review of how each pillar is holding up.
+AI-powered investment thesis generation and weekly monitoring for fund managers. Generate a full Markdown investment thesis from a ticker + a few bullets, upload broker research, edit the document freely, and get a weekly automated review of how the thesis is holding up.
 
 ## How this was built
 
@@ -42,9 +42,9 @@ Open <http://localhost:5173>. Vite proxies `/api` to the backend on 3001.
 ### Tests
 
 ```bash
-pnpm test                 # 85 backend unit tests
-pnpm test:integration     # 46 integration tests (Testcontainers — needs Docker)
-cd web && pnpm test       # 22 frontend component tests
+pnpm test                 # 68 backend unit tests
+pnpm test:integration     # 40 integration tests (Testcontainers — needs Docker)
+cd web && pnpm test       # 28 frontend component tests
 pnpm test:e2e             # 9 Playwright E2E tests (needs Docker + dev servers)
 ```
 

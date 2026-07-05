@@ -6,7 +6,6 @@ import {
   varchar,
   text,
   timestamp,
-  integer,
   numeric,
   date,
   bigint,
@@ -50,41 +49,16 @@ export const theses = pgTable("theses", {
   holdingId: uuid("holding_id")
     .notNull()
     .references(() => holdings.id, { onDelete: "cascade" }),
-  summary: text(),
-  qualityAssess: text("quality_assess"),
-  valuation: jsonb(),
-  assumptions: jsonb(),
-  risks: jsonb(),
+  content: text(),
   sources: jsonb(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const thesesRelations = relations(theses, ({ one, many }) => ({
+export const thesesRelations = relations(theses, ({ one }) => ({
   holding: one(holdings, {
     fields: [theses.holdingId],
     references: [holdings.id],
-  }),
-  pillars: many(thesisPillars),
-}));
-
-// Thesis Pillars
-export const thesisPillars = pgTable("thesis_pillars", {
-  id: uuid().defaultRandom().primaryKey(),
-  thesisId: uuid("thesis_id")
-    .notNull()
-    .references(() => theses.id, { onDelete: "cascade" }),
-  title: varchar({ length: 255 }).notNull(),
-  body: text(),
-  sortOrder: integer("sort_order").notNull().default(0),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
-export const thesisPillarsRelations = relations(thesisPillars, ({ one }) => ({
-  thesis: one(theses, {
-    fields: [thesisPillars.thesisId],
-    references: [theses.id],
   }),
 }));
 
@@ -103,7 +77,6 @@ export const weeklyLogs = pgTable(
     relativePerf: numeric("relative_perf", { precision: 8, scale: 4 }),
     thesisImpact: thesisImpactEnum("thesis_impact"),
     summary: text(),
-    pillarRefs: jsonb("pillar_refs"),
     sources: jsonb(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

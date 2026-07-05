@@ -101,7 +101,7 @@ export class ThesisAgent {
 
   /**
    * Analyse a holding's weekly news, price action, and broker research
-   * against its thesis pillars and assumptions.
+   * against its thesis document.
    */
   async analyseWeekly(
     input: WeeklyAnalysisInput,
