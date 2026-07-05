@@ -1,0 +1,368 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "Thesis Tracker" [ref=e5] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e6]:
+      - button "Run Weekly Monitoring" [ref=e7]
+      - button "Upload Spreadsheet" [ref=e8]
+      - button "+ Add Holding" [ref=e9]
+  - main [ref=e10]:
+    - generic [ref=e11]:
+      - heading "Holdings" [level=2] [ref=e12]
+      - generic [ref=e13]:
+        - img
+        - searchbox "Search holdings by ticker or company name" [ref=e14]
+        - generic [ref=e15]: ⌘K
+      - group "Filter holdings" [ref=e16]:
+        - button "All" [pressed] [ref=e17] [cursor=pointer]
+        - button "Long" [ref=e18] [cursor=pointer]
+        - button "Short" [ref=e19] [cursor=pointer]
+        - button "Strengthened" [ref=e20] [cursor=pointer]
+        - button "Weakened" [ref=e21] [cursor=pointer]
+        - button "Unchanged" [ref=e22] [cursor=pointer]
+        - button "Active" [ref=e23] [cursor=pointer]
+        - button "Closed" [ref=e24] [cursor=pointer]
+        - button "Paused" [ref=e25] [cursor=pointer]
+      - table [ref=e28]:
+        - rowgroup [ref=e29]:
+          - row "Ticker Company Position Thesis Date Last Update Impact Week Chg" [ref=e30]:
+            - columnheader "Ticker" [ref=e31] [cursor=pointer]:
+              - generic [ref=e32]:
+                - text: Ticker
+                - img [ref=e33]
+            - columnheader "Company" [ref=e35] [cursor=pointer]:
+              - generic [ref=e36]: Company
+            - columnheader "Position" [ref=e37] [cursor=pointer]:
+              - generic [ref=e38]: Position
+            - columnheader "Thesis Date" [ref=e39] [cursor=pointer]:
+              - generic [ref=e40]: Thesis Date
+            - columnheader "Last Update" [ref=e41] [cursor=pointer]:
+              - generic [ref=e42]: Last Update
+            - columnheader "Impact" [ref=e43] [cursor=pointer]:
+              - generic [ref=e44]: Impact
+            - columnheader "Week Chg" [ref=e45]:
+              - generic [ref=e47]: Week Chg
+            - columnheader [ref=e48]
+        - rowgroup [ref=e49]:
+          - row "BDMSFT Microsoft Corp. long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete BDMSFT" [ref=e50] [cursor=pointer]:
+            - cell "BDMSFT" [ref=e51]
+            - cell "Microsoft Corp." [ref=e52]:
+              - generic [ref=e53]: Microsoft Corp.
+            - cell "long" [ref=e54]:
+              - generic [ref=e55]: long
+            - cell "Jul 4, 2026" [ref=e56]
+            - cell "Jul 4, 2026" [ref=e57]
+            - cell "Strengthened" [ref=e58]:
+              - generic [ref=e60]: Strengthened
+            - cell "--" [ref=e61]:
+              - generic [ref=e62]: "--"
+            - cell "Delete BDMSFT" [ref=e63]:
+              - button "Delete BDMSFT" [ref=e64]: Delete
+          - row "BTAAPL Apple Inc. long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete BTAAPL" [ref=e65] [cursor=pointer]:
+            - cell "BTAAPL" [ref=e66]
+            - cell "Apple Inc." [ref=e67]:
+              - generic [ref=e68]: Apple Inc.
+            - cell "long" [ref=e69]:
+              - generic [ref=e70]: long
+            - cell "Jul 4, 2026" [ref=e71]
+            - cell "Jul 4, 2026" [ref=e72]
+            - cell "Strengthened" [ref=e73]:
+              - generic [ref=e75]: Strengthened
+            - cell "--" [ref=e76]:
+              - generic [ref=e77]: "--"
+            - cell "Delete BTAAPL" [ref=e78]:
+              - button "Delete BTAAPL" [ref=e79]: Delete
+          - row "BTGOOG Alphabet Inc. long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete BTGOOG" [ref=e80] [cursor=pointer]:
+            - cell "BTGOOG" [ref=e81]
+            - cell "Alphabet Inc." [ref=e82]:
+              - generic [ref=e83]: Alphabet Inc.
+            - cell "long" [ref=e84]:
+              - generic [ref=e85]: long
+            - cell "Jul 4, 2026" [ref=e86]
+            - cell "Jul 4, 2026" [ref=e87]
+            - cell "Strengthened" [ref=e88]:
+              - generic [ref=e90]: Strengthened
+            - cell "--" [ref=e91]:
+              - generic [ref=e92]: "--"
+            - cell "Delete BTGOOG" [ref=e93]:
+              - button "Delete BTGOOG" [ref=e94]: Delete
+          - row "BTMSFT Microsoft Corp. long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete BTMSFT" [ref=e95] [cursor=pointer]:
+            - cell "BTMSFT" [ref=e96]
+            - cell "Microsoft Corp." [ref=e97]:
+              - generic [ref=e98]: Microsoft Corp.
+            - cell "long" [ref=e99]:
+              - generic [ref=e100]: long
+            - cell "Jul 4, 2026" [ref=e101]
+            - cell "Jul 4, 2026" [ref=e102]
+            - cell "Strengthened" [ref=e103]:
+              - generic [ref=e105]: Strengthened
+            - cell "--" [ref=e106]:
+              - generic [ref=e107]: "--"
+            - cell "Delete BTMSFT" [ref=e108]:
+              - button "Delete BTMSFT" [ref=e109]: Delete
+          - row "EVAL01 Eval Test long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete EVAL01" [ref=e110] [cursor=pointer]:
+            - cell "EVAL01" [ref=e111]
+            - cell "Eval Test" [ref=e112]:
+              - generic [ref=e113]: Eval Test
+            - cell "long" [ref=e114]:
+              - generic [ref=e115]: long
+            - cell "Jul 4, 2026" [ref=e116]
+            - cell "Jul 4, 2026" [ref=e117]
+            - cell "Strengthened" [ref=e118]:
+              - generic [ref=e120]: Strengthened
+            - cell "--" [ref=e121]:
+              - generic [ref=e122]: "--"
+            - cell "Delete EVAL01" [ref=e123]:
+              - button "Delete EVAL01" [ref=e124]: Delete
+          - row "HAAPL Apple Inc. long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete HAAPL" [ref=e125] [cursor=pointer]:
+            - cell "HAAPL" [ref=e126]
+            - cell "Apple Inc." [ref=e127]:
+              - generic [ref=e128]: Apple Inc.
+            - cell "long" [ref=e129]:
+              - generic [ref=e130]: long
+            - cell "Jul 4, 2026" [ref=e131]
+            - cell "Jul 4, 2026" [ref=e132]
+            - cell "Strengthened" [ref=e133]:
+              - generic [ref=e135]: Strengthened
+            - cell "--" [ref=e136]:
+              - generic [ref=e137]: "--"
+            - cell "Delete HAAPL" [ref=e138]:
+              - button "Delete HAAPL" [ref=e139]: Delete
+          - row "HGOOG Alphabet Inc. long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete HGOOG" [ref=e140] [cursor=pointer]:
+            - cell "HGOOG" [ref=e141]
+            - cell "Alphabet Inc." [ref=e142]:
+              - generic [ref=e143]: Alphabet Inc.
+            - cell "long" [ref=e144]:
+              - generic [ref=e145]: long
+            - cell "Jul 4, 2026" [ref=e146]
+            - cell "Jul 4, 2026" [ref=e147]
+            - cell "Strengthened" [ref=e148]:
+              - generic [ref=e150]: Strengthened
+            - cell "--" [ref=e151]:
+              - generic [ref=e152]: "--"
+            - cell "Delete HGOOG" [ref=e153]:
+              - button "Delete HGOOG" [ref=e154]: Delete
+          - row "LIV28934 LIV28934 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete LIV28934" [ref=e155] [cursor=pointer]:
+            - cell "LIV28934" [ref=e156]
+            - cell "LIV28934 Test Corp" [ref=e157]:
+              - generic [ref=e158]: LIV28934 Test Corp
+            - cell "long" [ref=e159]:
+              - generic [ref=e160]: long
+            - cell "Jul 4, 2026" [ref=e161]
+            - cell "Jul 4, 2026" [ref=e162]
+            - cell "Strengthened" [ref=e163]:
+              - generic [ref=e165]: Strengthened
+            - cell "--" [ref=e166]:
+              - generic [ref=e167]: "--"
+            - cell "Delete LIV28934" [ref=e168]:
+              - button "Delete LIV28934" [ref=e169]: Delete
+          - row "LIV50690 LIV50690 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete LIV50690" [ref=e170] [cursor=pointer]:
+            - cell "LIV50690" [ref=e171]
+            - cell "LIV50690 Test Corp" [ref=e172]:
+              - generic [ref=e173]: LIV50690 Test Corp
+            - cell "long" [ref=e174]:
+              - generic [ref=e175]: long
+            - cell "Jul 4, 2026" [ref=e176]
+            - cell "Jul 4, 2026" [ref=e177]
+            - cell "Strengthened" [ref=e178]:
+              - generic [ref=e180]: Strengthened
+            - cell "--" [ref=e181]:
+              - generic [ref=e182]: "--"
+            - cell "Delete LIV50690" [ref=e183]:
+              - button "Delete LIV50690" [ref=e184]: Delete
+          - row "LIV60180 LIV60180 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete LIV60180" [ref=e185] [cursor=pointer]:
+            - cell "LIV60180" [ref=e186]
+            - cell "LIV60180 Test Corp" [ref=e187]:
+              - generic [ref=e188]: LIV60180 Test Corp
+            - cell "long" [ref=e189]:
+              - generic [ref=e190]: long
+            - cell "Jul 4, 2026" [ref=e191]
+            - cell "Jul 4, 2026" [ref=e192]
+            - cell "Strengthened" [ref=e193]:
+              - generic [ref=e195]: Strengthened
+            - cell "--" [ref=e196]:
+              - generic [ref=e197]: "--"
+            - cell "Delete LIV60180" [ref=e198]:
+              - button "Delete LIV60180" [ref=e199]: Delete
+          - row "LIV64247 LIV64247 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete LIV64247" [ref=e200] [cursor=pointer]:
+            - cell "LIV64247" [ref=e201]
+            - cell "LIV64247 Test Corp" [ref=e202]:
+              - generic [ref=e203]: LIV64247 Test Corp
+            - cell "long" [ref=e204]:
+              - generic [ref=e205]: long
+            - cell "Jul 4, 2026" [ref=e206]
+            - cell "Jul 4, 2026" [ref=e207]
+            - cell "Strengthened" [ref=e208]:
+              - generic [ref=e210]: Strengthened
+            - cell "--" [ref=e211]:
+              - generic [ref=e212]: "--"
+            - cell "Delete LIV64247" [ref=e213]:
+              - button "Delete LIV64247" [ref=e214]: Delete
+          - row "LIV76697 LIV76697 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete LIV76697" [ref=e215] [cursor=pointer]:
+            - cell "LIV76697" [ref=e216]
+            - cell "LIV76697 Test Corp" [ref=e217]:
+              - generic [ref=e218]: LIV76697 Test Corp
+            - cell "long" [ref=e219]:
+              - generic [ref=e220]: long
+            - cell "Jul 4, 2026" [ref=e221]
+            - cell "Jul 4, 2026" [ref=e222]
+            - cell "Strengthened" [ref=e223]:
+              - generic [ref=e225]: Strengthened
+            - cell "--" [ref=e226]:
+              - generic [ref=e227]: "--"
+            - cell "Delete LIV76697" [ref=e228]:
+              - button "Delete LIV76697" [ref=e229]: Delete
+          - row "LIV78883 LIV78883 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete LIV78883" [ref=e230] [cursor=pointer]:
+            - cell "LIV78883" [ref=e231]
+            - cell "LIV78883 Test Corp" [ref=e232]:
+              - generic [ref=e233]: LIV78883 Test Corp
+            - cell "long" [ref=e234]:
+              - generic [ref=e235]: long
+            - cell "Jul 4, 2026" [ref=e236]
+            - cell "Jul 4, 2026" [ref=e237]
+            - cell "Strengthened" [ref=e238]:
+              - generic [ref=e240]: Strengthened
+            - cell "--" [ref=e241]:
+              - generic [ref=e242]: "--"
+            - cell "Delete LIV78883" [ref=e243]:
+              - button "Delete LIV78883" [ref=e244]: Delete
+          - row "LIV99119 LIV99119 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete LIV99119" [ref=e245] [cursor=pointer]:
+            - cell "LIV99119" [ref=e246]
+            - cell "LIV99119 Test Corp" [ref=e247]:
+              - generic [ref=e248]: LIV99119 Test Corp
+            - cell "long" [ref=e249]:
+              - generic [ref=e250]: long
+            - cell "Jul 4, 2026" [ref=e251]
+            - cell "Jul 4, 2026" [ref=e252]
+            - cell "Strengthened" [ref=e253]:
+              - generic [ref=e255]: Strengthened
+            - cell "--" [ref=e256]:
+              - generic [ref=e257]: "--"
+            - cell "Delete LIV99119" [ref=e258]:
+              - button "Delete LIV99119" [ref=e259]: Delete
+          - row "MSFT Microsoft Corp. long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete MSFT" [ref=e260] [cursor=pointer]:
+            - cell "MSFT" [ref=e261]
+            - cell "Microsoft Corp." [ref=e262]:
+              - generic [ref=e263]: Microsoft Corp.
+            - cell "long" [ref=e264]:
+              - generic [ref=e265]: long
+            - cell "Jul 4, 2026" [ref=e266]
+            - cell "Jul 4, 2026" [ref=e267]
+            - cell "Strengthened" [ref=e268]:
+              - generic [ref=e270]: Strengthened
+            - cell "--" [ref=e271]:
+              - generic [ref=e272]: "--"
+            - cell "Delete MSFT" [ref=e273]:
+              - button "Delete MSFT" [ref=e274]: Delete
+          - row "RES24528 RES24528 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete RES24528" [ref=e275] [cursor=pointer]:
+            - cell "RES24528" [ref=e276]
+            - cell "RES24528 Test Corp" [ref=e277]:
+              - generic [ref=e278]: RES24528 Test Corp
+            - cell "long" [ref=e279]:
+              - generic [ref=e280]: long
+            - cell "Jul 4, 2026" [ref=e281]
+            - cell "Jul 4, 2026" [ref=e282]
+            - cell "Strengthened" [ref=e283]:
+              - generic [ref=e285]: Strengthened
+            - cell "--" [ref=e286]:
+              - generic [ref=e287]: "--"
+            - cell "Delete RES24528" [ref=e288]:
+              - button "Delete RES24528" [ref=e289]: Delete
+          - row "RES27852 RES27852 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete RES27852" [ref=e290] [cursor=pointer]:
+            - cell "RES27852" [ref=e291]
+            - cell "RES27852 Test Corp" [ref=e292]:
+              - generic [ref=e293]: RES27852 Test Corp
+            - cell "long" [ref=e294]:
+              - generic [ref=e295]: long
+            - cell "Jul 4, 2026" [ref=e296]
+            - cell "Jul 4, 2026" [ref=e297]
+            - cell "Strengthened" [ref=e298]:
+              - generic [ref=e300]: Strengthened
+            - cell "--" [ref=e301]:
+              - generic [ref=e302]: "--"
+            - cell "Delete RES27852" [ref=e303]:
+              - button "Delete RES27852" [ref=e304]: Delete
+          - row "RES41122 RES41122 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete RES41122" [ref=e305] [cursor=pointer]:
+            - cell "RES41122" [ref=e306]
+            - cell "RES41122 Test Corp" [ref=e307]:
+              - generic [ref=e308]: RES41122 Test Corp
+            - cell "long" [ref=e309]:
+              - generic [ref=e310]: long
+            - cell "Jul 4, 2026" [ref=e311]
+            - cell "Jul 4, 2026" [ref=e312]
+            - cell "Strengthened" [ref=e313]:
+              - generic [ref=e315]: Strengthened
+            - cell "--" [ref=e316]:
+              - generic [ref=e317]: "--"
+            - cell "Delete RES41122" [ref=e318]:
+              - button "Delete RES41122" [ref=e319]: Delete
+          - row "RES42181 RES42181 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete RES42181" [ref=e320] [cursor=pointer]:
+            - cell "RES42181" [ref=e321]
+            - cell "RES42181 Test Corp" [ref=e322]:
+              - generic [ref=e323]: RES42181 Test Corp
+            - cell "long" [ref=e324]:
+              - generic [ref=e325]: long
+            - cell "Jul 4, 2026" [ref=e326]
+            - cell "Jul 4, 2026" [ref=e327]
+            - cell "Strengthened" [ref=e328]:
+              - generic [ref=e330]: Strengthened
+            - cell "--" [ref=e331]:
+              - generic [ref=e332]: "--"
+            - cell "Delete RES42181" [ref=e333]:
+              - button "Delete RES42181" [ref=e334]: Delete
+          - row "RES48403 RES48403 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete RES48403" [ref=e335] [cursor=pointer]:
+            - cell "RES48403" [ref=e336]
+            - cell "RES48403 Test Corp" [ref=e337]:
+              - generic [ref=e338]: RES48403 Test Corp
+            - cell "long" [ref=e339]:
+              - generic [ref=e340]: long
+            - cell "Jul 4, 2026" [ref=e341]
+            - cell "Jul 4, 2026" [ref=e342]
+            - cell "Strengthened" [ref=e343]:
+              - generic [ref=e345]: Strengthened
+            - cell "--" [ref=e346]:
+              - generic [ref=e347]: "--"
+            - cell "Delete RES48403" [ref=e348]:
+              - button "Delete RES48403" [ref=e349]: Delete
+          - row "RES71097 RES71097 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete RES71097" [ref=e350] [cursor=pointer]:
+            - cell "RES71097" [ref=e351]
+            - cell "RES71097 Test Corp" [ref=e352]:
+              - generic [ref=e353]: RES71097 Test Corp
+            - cell "long" [ref=e354]:
+              - generic [ref=e355]: long
+            - cell "Jul 4, 2026" [ref=e356]
+            - cell "Jul 4, 2026" [ref=e357]
+            - cell "Strengthened" [ref=e358]:
+              - generic [ref=e360]: Strengthened
+            - cell "--" [ref=e361]:
+              - generic [ref=e362]: "--"
+            - cell "Delete RES71097" [ref=e363]:
+              - button "Delete RES71097" [ref=e364]: Delete
+          - row "RES93903 RES93903 Test Corp long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete RES93903" [ref=e365] [cursor=pointer]:
+            - cell "RES93903" [ref=e366]
+            - cell "RES93903 Test Corp" [ref=e367]:
+              - generic [ref=e368]: RES93903 Test Corp
+            - cell "long" [ref=e369]:
+              - generic [ref=e370]: long
+            - cell "Jul 4, 2026" [ref=e371]
+            - cell "Jul 4, 2026" [ref=e372]
+            - cell "Strengthened" [ref=e373]:
+              - generic [ref=e375]: Strengthened
+            - cell "--" [ref=e376]:
+              - generic [ref=e377]: "--"
+            - cell "Delete RES93903" [ref=e378]:
+              - button "Delete RES93903" [ref=e379]: Delete
+          - row "WKAAPL Apple Inc. long Jul 4, 2026 Jul 4, 2026 Strengthened -- Delete WKAAPL" [ref=e380] [cursor=pointer]:
+            - cell "WKAAPL" [ref=e381]
+            - cell "Apple Inc." [ref=e382]:
+              - generic [ref=e383]: Apple Inc.
+            - cell "long" [ref=e384]:
+              - generic [ref=e385]: long
+            - cell "Jul 4, 2026" [ref=e386]
+            - cell "Jul 4, 2026" [ref=e387]
+            - cell "Strengthened" [ref=e388]:
+              - generic [ref=e390]: Strengthened
+            - cell "--" [ref=e391]:
+              - generic [ref=e392]: "--"
+            - cell "Delete WKAAPL" [ref=e393]:
+              - button "Delete WKAAPL" [ref=e394]: Delete

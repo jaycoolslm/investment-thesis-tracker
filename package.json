@@ -22,8 +22,8 @@
     ]
   },
   "dependencies": {
-    "@openai/codex": "^0.120.0",
-    "@openai/codex-sdk": "^0.120.0",
+    "@openai/codex": "^0.142.5",
+    "@openai/codex-sdk": "^0.142.5",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",

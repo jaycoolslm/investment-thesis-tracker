@@ -1,0 +1,104 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - link "Thesis Tracker" [ref=f1e5] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f1e6]:
+      - button "Run Weekly Monitoring" [ref=f1e7]
+      - button "Upload Spreadsheet" [ref=f1e8]
+      - button "+ Add Holding" [ref=f1e9]
+  - main [ref=f1e10]:
+    - generic [ref=f1e11]:
+      - generic [ref=f1e12]:
+        - link "Holdings" [ref=f1e13] [cursor=pointer]:
+          - /url: /
+          - img [ref=f1e14]
+          - text: Holdings
+        - generic [ref=f1e16]:
+          - heading "BTAAPL" [level=2] [ref=f1e17]
+          - generic [ref=f1e18]: long
+          - link "Export thesis as PDF" [ref=f1e19] [cursor=pointer]:
+            - /url: /holdings/06fc29e2-8350-4b3f-8878-035bd2fef3ec/print
+            - img [ref=f1e20]
+            - text: Export PDF
+        - paragraph [ref=f1e22]: Apple Inc.
+        - generic [ref=f1e23]:
+          - generic [ref=f1e24]: Generated Jul 4, 2026
+          - generic [ref=f1e25]: "|"
+          - generic [ref=f1e26]: "Benchmark:"
+          - combobox [ref=f1e27]:
+            - generic: S&P 500
+            - img [ref=f1e29]
+          - generic [ref=f1e31]: "|"
+          - generic [ref=f1e32]: "Status:"
+          - combobox [ref=f1e33]:
+            - generic: Active
+            - img [ref=f1e35]
+      - generic [ref=f1e37]:
+        - tablist "Thesis sections" [ref=f1e38]:
+          - tab "Thesis" [selected] [ref=f1e39]
+          - tab "Weekly Log (1)" [ref=f1e40]
+        - tabpanel "Thesis" [ref=f1e41]:
+          - generic [ref=f1e42]:
+            - generic [ref=f1e43]:
+              - heading "Thesis" [level=3] [ref=f1e44]
+              - button "Edit" [ref=f1e46]
+            - generic [ref=f1e47]:
+              - heading "Summary" [level=2] [ref=f1e48]
+              - paragraph [ref=f1e49]: Apple demonstrates strong competitive positioning driven by its services ecosystem and installed base of over 2 billion active devices. The company's transition toward higher-margin services revenue provides a durable earnings growth trajectory, while disciplined capital allocation through buybacks enhances per-share economics.
+              - heading "Thesis Pillars" [level=2] [ref=f1e50]
+              - heading "Services Revenue Flywheel" [level=3] [ref=f1e51]
+              - paragraph [ref=f1e52]: Apple's services segment grew 14% YoY to $24.2B in Q1 FY25, now representing 27% of total revenue. The installed base of 2.2B active devices creates a recurring revenue stream with 70%+ gross margins, significantly above the 36% hardware margin.
+              - heading "Pricing Power and Brand Moat" [level=3] [ref=f1e53]
+              - paragraph [ref=f1e54]: Apple raised iPhone ASPs by 8% over the past two years with minimal volume impact. The ecosystem lock-in (iCloud, Apple Watch, AirPods) drives a switching cost moat that sustains premium pricing across product lines.
+              - heading "Capital Return Program" [level=3] [ref=f1e55]
+              - paragraph [ref=f1e56]: Apple has returned $700B+ to shareholders since 2012 through buybacks and dividends. The company repurchased $25B in Q1 FY25 alone, reducing share count by ~3% annually and driving EPS growth above revenue growth.
+              - heading "Quality Assessment" [level=2] [ref=f1e57]
+              - paragraph [ref=f1e58]: "Financial Strength: ROIC of 58%, net cash position of $51B, FCF margin of 28%. Competitive Position: Dominant in premium smartphones (85% of industry profits), growing services moat. ESG: Carbon neutral since 2020 for corporate operations, supply chain target 2030."
+              - heading "Valuation" [level=2] [ref=f1e59]
+              - paragraph [ref=f1e60]: DCF with terminal growth rate of 3%, WACC of 9.5%.
+              - list [ref=f1e61]:
+                - listitem [ref=f1e62]:
+                  - strong [ref=f1e63]: "Upside case:"
+                  - text: Services re-rate drives P/E to 35x — target $280 (+20%)
+                - listitem [ref=f1e64]:
+                  - strong [ref=f1e65]: "Base case:"
+                  - text: Steady growth at current multiple — target $250 (+8%)
+                - listitem [ref=f1e66]:
+                  - strong [ref=f1e67]: "Downside case:"
+                  - text: China weakness + regulatory headwinds — target $195 (-16%)
+              - heading "Key Assumptions" [level=2] [ref=f1e68]
+              - list [ref=f1e69]:
+                - listitem [ref=f1e70]: Services revenue grows >15% annually through FY27
+                - listitem [ref=f1e71]: iPhone unit volumes remain flat to slightly positive
+                - listitem [ref=f1e72]: Gross margin expands 50-100bps annually from services mix shift
+                - listitem [ref=f1e73]: Share buyback program continues at $90B+ annually
+              - heading "Risks" [level=2] [ref=f1e74]
+              - list [ref=f1e75]:
+                - listitem [ref=f1e76]:
+                  - strong [ref=f1e77]: "High:"
+                  - text: EU Digital Markets Act forces sideloading and alternative payment systems, reducing App Store revenue by 10-15%
+                - listitem [ref=f1e78]:
+                  - strong [ref=f1e79]: "Medium:"
+                  - text: China revenue declines accelerate due to Huawei competition and geopolitical tensions
+                - listitem [ref=f1e80]:
+                  - strong [ref=f1e81]: "Medium:"
+                  - text: AI features fail to drive meaningful iPhone upgrade cycle in FY26
+          - generic [ref=f1e83]:
+            - heading "Web Sources" [level=3] [ref=f1e84]
+            - list [ref=f1e85]:
+              - listitem [ref=f1e86]:
+                - generic [ref=f1e87]: Filing
+                - link "Apple Q1 FY25 Earnings Release" [ref=f1e88] [cursor=pointer]:
+                  - /url: https://investor.apple.com/sec-filings
+              - listitem [ref=f1e89]:
+                - generic [ref=f1e90]: Web
+                - generic [ref=f1e91]: Apple Services Revenue Analysis — Bloomberg Intelligence
+              - listitem [ref=f1e92]:
+                - generic [ref=f1e93]: News
+                - link "EU Digital Markets Act Impact Assessment" [ref=f1e94] [cursor=pointer]:
+                  - /url: https://ec.europa.eu/digital-markets-act
+          - generic [ref=f1e96]:
+            - heading "Broker Research" [level=3] [ref=f1e97]
+            - button "Drop broker research here, or browse PDF or DOCX, up to 50 MB" [ref=f1e99] [cursor=pointer]:
+              - paragraph [ref=f1e100]: Drop broker research here, or browse
+              - paragraph [ref=f1e101]: PDF or DOCX, up to 50 MB
