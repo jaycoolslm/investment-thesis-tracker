@@ -15,16 +15,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6380:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   api:
     build:
       context: .
@@ -34,11 +24,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://thesis:thesis@postgres:5432/thesis_tracker
-      REDIS_URL: redis://redis:6379
       PORT: "3001"
       NODE_ENV: development
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

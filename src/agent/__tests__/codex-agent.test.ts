@@ -44,7 +44,6 @@ vi.mock("../../config.js", () => ({
     AZURE_OPENAI_ENDPOINT: undefined,
     AZURE_OPENAI_API_KEY: undefined,
     DATABASE_URL: "postgresql://test:test@localhost:5432/test",
-    REDIS_URL: "redis://localhost:6380",
     PORT: 3001,
     NODE_ENV: "test",
   },

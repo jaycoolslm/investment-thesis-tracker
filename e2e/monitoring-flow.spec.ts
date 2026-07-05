@@ -160,20 +160,40 @@ test.describe("Monitoring flow (E2E)", () => {
     const h2 = await seedHoldingViaApi(page, "MSFT", "Microsoft Corp.");
     const h3 = await seedHoldingViaApi(page, "GOOG", "Alphabet Inc.");
 
-    // Trigger individual monitoring (batch route requires Redis which may not be available)
-    for (const h of [h1, h2, h3]) {
-      await page.request.post(`/api/holdings/${h.id}/weekly-logs/trigger`);
-    }
+    // Trigger the in-process batch route for all active holdings
+    const triggerRes = await page.request.post("/api/monitoring/trigger");
+    expect([200, 202]).toContain(triggerRes.status());
+
+    // Wait until every seeded holding has its weekly log
+    await expect
+      .poll(
+        async () => {
+          let count = 0;
+          for (const h of [h1, h2, h3]) {
+            const logsRes = await page.request.get(
+              `/api/holdings/${h.id}/weekly-logs`,
+            );
+            const logs = await logsRes.json();
+            if (logs.length === 1 && logs[0].thesisImpact) count++;
+          }
+          return count;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(3);
+
+    // Triggering again in the same week must not duplicate weekly logs:
+    // holdings already logged this week are excluded from the batch.
+    const second = await page.request.post("/api/monitoring/trigger");
+    expect([200, 202, 409]).toContain(second.status());
     await page.waitForTimeout(1000);
 
-    // Verify all 3 have weekly logs
     for (const h of [h1, h2, h3]) {
       const logsRes = await page.request.get(
         `/api/holdings/${h.id}/weekly-logs`,
       );
       const logs = await logsRes.json();
-      expect(logs).toHaveLength(1);
-      expect(logs[0].thesisImpact).toBeTruthy();
+      expect(logs).toHaveLength(1); // exactly one log per (holding, week)
     }
 
     // Navigate to dashboard and verify each seeded holding shows an impact

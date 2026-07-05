@@ -5,7 +5,6 @@ import request from "supertest";
 vi.mock("../../config.js", () => ({
   config: {
     DATABASE_URL: "postgresql://test:test@localhost:5432/test",
-    REDIS_URL: "redis://localhost:6380",
     PORT: 3001,
     NODE_ENV: "test",
     OPENAI_API_KEY: "test-key",

@@ -25,43 +25,30 @@ vi.mock("../../services/market-data.js", () => ({
   },
 }));
 
-// Mock queue module to avoid real Redis/BullMQ connections for batch tests
-const mockEnqueueMonitoringBatch = vi.fn();
-const mockGetMonitoringBatchState = vi.fn();
-const mockHsetnx = vi.fn().mockResolvedValue(1);
-const mockRedisMulti = {
-  hset: vi.fn().mockReturnThis(),
-  expire: vi.fn().mockReturnThis(),
-  exec: vi.fn().mockResolvedValue([]),
-};
-const mockRedisDel = vi.fn();
-
-vi.mock("../../jobs/queue.js", () => ({
-  enqueueMonitoringBatch: (...args: unknown[]) =>
-    mockEnqueueMonitoringBatch(...args),
-  getMonitoringBatchState: (...args: unknown[]) =>
-    mockGetMonitoringBatchState(...args),
-  redisConnection: {
-    hsetnx: (...args: unknown[]) => mockHsetnx(...args),
-    multi: () => mockRedisMulti,
-    del: (...args: unknown[]) => mockRedisDel(...args),
-    hgetall: vi.fn().mockResolvedValue({}),
-  },
-  monitoringQueue: {},
-  bulkQueue: {},
-}));
-
 // Dynamic imports after mocks
 const { createApp } = await import("../../app.js");
 const { db } = await import("../../db/index.js");
 const { holdings, theses, weeklyLogs, documents } =
   await import("../../db/schema.js");
+const { clearRegistry } = await import("../../services/batch-runner.js");
+const { runMonitoringBatch } = await import("../../jobs/scheduler.js");
+const { eq } = await import("drizzle-orm");
 
 const app = createApp();
 
+const WEEKLY_LOG_RESULT = {
+  ...VALID_WEEKLY_LOG_FIXTURE,
+  priceChangePct: null,
+  indexChangePct: null,
+  relativePerf: null,
+};
+
 beforeEach(async () => {
   vi.clearAllMocks();
-  mockHsetnx.mockResolvedValue(1);
+  clearRegistry();
+  mockGetWeeklyReturn.mockResolvedValue(null);
+  mockGetIndexWeeklyReturn.mockResolvedValue(null);
+  mockAnalyseWeekly.mockResolvedValue(WEEKLY_LOG_RESULT);
   await db.delete(documents);
   await db.delete(weeklyLogs);
   await db.delete(theses);
@@ -100,16 +87,21 @@ async function seedHoldingWithThesis(
   return holding;
 }
 
-/** Set up mock responses for a successful weekly monitoring call */
-function mockSuccessfulMonitoring() {
-  mockGetWeeklyReturn.mockResolvedValueOnce(null);
-  mockGetIndexWeeklyReturn.mockResolvedValueOnce(null);
-  mockAnalyseWeekly.mockResolvedValueOnce({
-    ...VALID_WEEKLY_LOG_FIXTURE,
-    priceChangePct: null,
-    indexChangePct: null,
-    relativePerf: null,
-  });
+/** Run a full monitoring batch and return the tickers that got a weekly log. */
+async function runBatchAndGetLoggedTickers(): Promise<{
+  total: number;
+  tickers: string[];
+}> {
+  const result = await runMonitoringBatch();
+  if (!result) return { total: 0, tickers: [] };
+  await result.done;
+
+  const rows = await db
+    .select({ ticker: holdings.ticker })
+    .from(weeklyLogs)
+    .innerJoin(holdings, eq(weeklyLogs.holdingId, holdings.id));
+
+  return { total: result.total, tickers: rows.map((r) => r.ticker) };
 }
 
 describe("Paused/closed holding monitoring (integration)", () => {
@@ -137,7 +129,7 @@ describe("Paused/closed holding monitoring (integration)", () => {
     expect(mockAnalyseWeekly).not.toHaveBeenCalled();
   });
 
-  it("POST /api/monitoring/trigger excludes paused holdings from batch", async () => {
+  it("batch monitoring excludes paused holdings", async () => {
     await seedHoldingWithThesis({ ticker: "AAPL" });
     await seedHoldingWithThesis({ ticker: "MSFT", companyName: "Microsoft Corp." });
     await seedHoldingWithThesis({
@@ -146,19 +138,15 @@ describe("Paused/closed holding monitoring (integration)", () => {
       status: "paused",
     });
 
-    const res = await request(app).post("/api/monitoring/trigger").send();
+    const { total, tickers } = await runBatchAndGetLoggedTickers();
 
-    expect(res.status).toBe(202);
-    expect(res.body.total).toBe(2);
-    expect(mockEnqueueMonitoringBatch).toHaveBeenCalledOnce();
-    const [, items] = mockEnqueueMonitoringBatch.mock.calls[0];
-    const tickers = items.map((i: { ticker: string }) => i.ticker);
+    expect(total).toBe(2);
     expect(tickers).toContain("AAPL");
     expect(tickers).toContain("MSFT");
     expect(tickers).not.toContain("TSLA");
   });
 
-  it("POST /api/monitoring/trigger excludes closed holdings from batch", async () => {
+  it("batch monitoring excludes closed holdings", async () => {
     await seedHoldingWithThesis({ ticker: "AAPL" });
     await seedHoldingWithThesis({
       ticker: "GOOG",
@@ -166,12 +154,10 @@ describe("Paused/closed holding monitoring (integration)", () => {
       status: "closed",
     });
 
-    const res = await request(app).post("/api/monitoring/trigger").send();
+    const { total, tickers } = await runBatchAndGetLoggedTickers();
 
-    expect(res.status).toBe(202);
-    expect(res.body.total).toBe(1);
-    const [, items] = mockEnqueueMonitoringBatch.mock.calls[0];
-    expect(items[0].ticker).toBe("AAPL");
+    expect(total).toBe(1);
+    expect(tickers).toEqual(["AAPL"]);
   });
 
   it("re-activating a paused holding includes it in next batch", async () => {
@@ -186,19 +172,16 @@ describe("Paused/closed holding monitoring (integration)", () => {
       .put(`/api/holdings/${holding.id}`)
       .send({ status: "active" });
 
-    const res = await request(app).post("/api/monitoring/trigger").send();
+    const { total, tickers } = await runBatchAndGetLoggedTickers();
 
-    expect(res.status).toBe(202);
-    expect(res.body.total).toBe(1);
-    const [, items] = mockEnqueueMonitoringBatch.mock.calls[0];
-    expect(items[0].ticker).toBe("NVDA");
+    expect(total).toBe(1);
+    expect(tickers).toEqual(["NVDA"]);
   });
 
   it("pausing a holding mid-week preserves existing weekly log", async () => {
     const holding = await seedHoldingWithThesis();
 
     // Run monitoring first (creates a weekly log)
-    mockSuccessfulMonitoring();
     const triggerRes = await request(app)
       .post(`/api/holdings/${holding.id}/weekly-logs/trigger`)
       .send();

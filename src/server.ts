@@ -1,8 +1,5 @@
 import { config } from "./config.js";
 import { createApp } from "./app.js";
-import { bulkWorker } from "./jobs/bulk-worker.js";
-import { monitoringWorker } from "./jobs/weekly-worker.js";
-import { bulkQueue, monitoringQueue } from "./jobs/queue.js";
 import { startScheduler, stopScheduler } from "./jobs/scheduler.js";
 import { progressEmitter } from "./progress.js";
 import { EmailService } from "./services/email.js";
@@ -29,14 +26,10 @@ const server = app.listen(config.PORT, () => {
 });
 
 // Graceful shutdown
-async function shutdown() {
+function shutdown() {
   console.log("Shutting down gracefully...");
   stopScheduler();
   server.close();
-  await bulkWorker.close();
-  await monitoringWorker.close();
-  await bulkQueue.close();
-  await monitoringQueue.close();
   process.exit(0);
 }
 

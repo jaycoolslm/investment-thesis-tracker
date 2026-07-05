@@ -2,11 +2,12 @@ import { Router } from "express";
 import multer from "multer";
 import * as z from "zod";
 import { progressEmitter } from "../progress.js";
-import { cancelBatch, enqueueBatch, redisConnection } from "../jobs/queue.js";
 import {
   parseBulkFile,
   startBulkGeneration,
   getBatchState,
+  cancelBulkGeneration,
+  retryBulkGeneration,
 } from "../services/bulk-generation.js";
 import { ParseError } from "../services/file-parser.js";
 import { getTemplateBuffer } from "../services/template-generator.js";
@@ -73,12 +74,12 @@ bulkRouter.post("/bulk-generate/:batchId/start", async (req, res) => {
 
   try {
     console.log(`[bulk-api] Starting batch ${batchId}, excludeRows=${JSON.stringify(parsed.data.excludeRows ?? [])}`);
-    const result = await startBulkGeneration(
+    const { totalJobs, holdingIds } = await startBulkGeneration(
       batchId,
       parsed.data.excludeRows,
     );
-    console.log(`[bulk-api] Batch ${batchId} enqueued: ${result.totalJobs} jobs, holdingIds=${result.holdingIds.join(",")}`);
-    res.status(202).json({ batchId, ...result });
+    console.log(`[bulk-api] Batch ${batchId} started: ${totalJobs} jobs, holdingIds=${holdingIds.join(",")}`);
+    res.status(202).json({ batchId, totalJobs, holdingIds });
   } catch (err) {
     console.error(`[bulk-api] Failed to start batch ${batchId}:`, err);
     res.status(400).json({
@@ -99,7 +100,7 @@ bulkRouter.get("/bulk-generate/:batchId/progress", async (req, res) => {
   res.flushHeaders();
 
   // Send current state immediately on connect
-  const state = await getBatchState(batchId);
+  const state = getBatchState(batchId);
   if (state) {
     res.write(
       `data: ${JSON.stringify({ type: "progress", completed: state.completed, failed: state.failed, total: state.total })}\n\n`,
@@ -133,14 +134,13 @@ bulkRouter.get("/bulk-generate/:batchId/progress", async (req, res) => {
 bulkRouter.delete("/bulk-generate/:batchId", async (req, res) => {
   const batchId = req.params.batchId;
 
-  const state = await getBatchState(batchId);
+  const state = getBatchState(batchId);
   if (!state) {
     res.status(404).json({ error: "Batch not found" });
     return;
   }
 
-  const cancelled = await cancelBatch(batchId);
-  await redisConnection.hset(`batch:${batchId}`, "status", "cancelled");
+  const cancelled = cancelBulkGeneration(batchId);
 
   // Emit completion so SSE clients close
   progressEmitter.emit(batchId, {
@@ -168,51 +168,20 @@ bulkRouter.post("/bulk-generate/:batchId/retry", async (req, res) => {
     return;
   }
 
-  const state = await getBatchState(batchId);
-  if (!state) {
+  const result = retryBulkGeneration(batchId, parsed.data.holdingIds);
+  if (!result) {
     res.status(404).json({ error: "Batch not found" });
     return;
   }
 
-  // Get failures to retry
-  let failuresToRetry = state.failures;
-  if (parsed.data.holdingIds) {
-    const ids = new Set(parsed.data.holdingIds);
-    failuresToRetry = failuresToRetry.filter((f: { holdingId: string }) =>
-      ids.has(f.holdingId),
-    );
-  }
-
-  if (failuresToRetry.length === 0) {
+  if (result.retryCount === 0) {
     res.status(400).json({ error: "No failures to retry" });
     return;
   }
 
-  // Clear failures list and reset counters for retried items
-  await redisConnection.del(`batch:${batchId}:failures`);
-  const multi = redisConnection.multi();
-  multi.hset(`batch:${batchId}`, {
-    failed: "0",
-    status: "active",
-    total: String(state.completed + failuresToRetry.length),
-  });
-  await multi.exec();
-
-  // Re-enqueue
-  await enqueueBatch(
-    batchId,
-    failuresToRetry.map((f: { holdingId: string; ticker: string }) => ({
-      holdingId: f.holdingId,
-      ticker: f.ticker,
-      companyName: f.ticker, // Will be resolved during generation
-      direction: "long" as const, // Direction was already set when holding was created
-      bullets: "", // Bullets were already used in initial generation; agent re-reads holding
-    })),
-  );
-
   res.status(202).json({
-    retryCount: failuresToRetry.length,
-    holdingIds: failuresToRetry.map((f: { holdingId: string }) => f.holdingId),
+    retryCount: result.retryCount,
+    holdingIds: result.holdingIds,
   });
 });
 

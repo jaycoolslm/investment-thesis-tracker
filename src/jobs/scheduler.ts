@@ -1,76 +1,147 @@
 import cron, { type ScheduledTask } from "node-cron";
-import { eq } from "drizzle-orm";
+import { and, eq, notExists } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { holdings, theses } from "../db/schema.js";
+import { holdings, theses, weeklyLogs } from "../db/schema.js";
+import { progressEmitter } from "../progress.js";
 import {
-  redisConnection,
-  enqueueMonitoringBatch,
-} from "./queue.js";
-import { getCurrentWeek } from "../services/weekly-monitoring.js";
+  runBatch,
+  registerBatch,
+  getBatch,
+} from "../services/batch-runner.js";
+import {
+  getCurrentWeek,
+  WeeklyMonitoringService,
+} from "../services/weekly-monitoring.js";
 import { config } from "../config.js";
 
 let cronJob: ScheduledTask | null = null;
 
+export function monitoringBatchId(weekLabel: string): string {
+  return `monitoring:${weekLabel}`;
+}
+
 /**
- * Run a weekly monitoring batch for all active holdings with theses.
- * Returns { weekLabel, total } if jobs were enqueued, or null if skipped
- * (batch already exists for this week or no holdings to monitor).
+ * Run a weekly monitoring batch for all active holdings that have a thesis
+ * and no weekly log for the current week yet. The "no log this week" filter
+ * makes re-triggering idempotent and resumes a crashed batch for free.
+ * Returns null if a batch is already running or there is nothing to do.
  */
 export async function runMonitoringBatch(): Promise<{
   weekLabel: string;
   total: number;
+  done: Promise<void>;
 } | null> {
   const { weekLabel } = getCurrentWeek();
+  const batchId = monitoringBatchId(weekLabel);
 
-  // Idempotency: atomic check-and-set prevents race conditions
-  const wasSet = await redisConnection.hsetnx(
-    `monitoring:batch:${weekLabel}`,
-    "status",
-    "active",
-  );
-  if (wasSet === 0) {
-    console.log(
-      `[scheduler] Batch for ${weekLabel} already exists, skipping`,
-    );
+  if (getBatch(batchId)?.status === "active") {
+    console.log(`[scheduler] Batch for ${weekLabel} already running, skipping`);
     return null;
   }
 
-  // Query active holdings that have at least one thesis
-  const activeHoldings = await db
+  const pending = await db
     .selectDistinct({ id: holdings.id, ticker: holdings.ticker })
     .from(holdings)
     .innerJoin(theses, eq(theses.holdingId, holdings.id))
-    .where(eq(holdings.status, "active"));
+    .where(
+      and(
+        eq(holdings.status, "active"),
+        notExists(
+          db
+            .select()
+            .from(weeklyLogs)
+            .where(
+              and(
+                eq(weeklyLogs.holdingId, holdings.id),
+                eq(weeklyLogs.weekLabel, weekLabel),
+              ),
+            ),
+        ),
+      ),
+    );
 
-  if (activeHoldings.length === 0) {
-    // Clean up the Redis key we just set
-    await redisConnection.del(`monitoring:batch:${weekLabel}`);
-    console.log("[scheduler] No active holdings with theses to monitor");
+  if (pending.length === 0) {
+    console.log(`[scheduler] Nothing to monitor for ${weekLabel}`);
     return null;
   }
 
-  // Initialize batch state
-  const multi = redisConnection.multi();
-  multi.hset(`monitoring:batch:${weekLabel}`, {
-    total: String(activeHoldings.length),
-    completed: "0",
-    failed: "0",
-    startedAt: new Date().toISOString(),
-  });
-  multi.expire(`monitoring:batch:${weekLabel}`, 604800); // 7 days
-  multi.expire(`monitoring:batch:${weekLabel}:failures`, 604800);
-  await multi.exec();
+  registerBatch(batchId, "monitoring", pending.length);
+  const eventKey = monitoringBatchId(weekLabel);
 
-  // Enqueue jobs
-  await enqueueMonitoringBatch(
-    weekLabel,
-    activeHoldings.map((h) => ({ holdingId: h.id, ticker: h.ticker })),
-  );
+  const done = runBatch(
+    batchId,
+    pending.map((h) => ({ holdingId: h.id, ticker: h.ticker })),
+    async (item) => {
+      const service = new WeeklyMonitoringService();
+      const logId = await service.monitorHolding(item.holdingId);
+      console.log(`[scheduler] SUCCESS ${item.ticker} — logId=${logId}`);
+      progressEmitter.emit(eventKey, {
+        type: "holding_complete",
+        holdingId: item.holdingId,
+        ticker: item.ticker,
+        logId,
+      });
+    },
+    {
+      concurrency: config.MONITORING_CONCURRENCY,
+      retries: 2,
+      onItemDone: (item) => {
+        const state = getBatch(batchId)!;
+        progressEmitter.emit(eventKey, {
+          type: "progress",
+          completed: state.completed,
+          failed: state.failed,
+          total: state.total,
+          currentTicker: item.ticker,
+        });
+      },
+      onItemFailed: (item, error) => {
+        console.error(`[scheduler] FAILED ${item.ticker} — ${error}`);
+        const state = getBatch(batchId)!;
+        progressEmitter.emit(eventKey, {
+          type: "holding_failed",
+          holdingId: item.holdingId,
+          ticker: item.ticker,
+          error,
+        });
+        progressEmitter.emit(eventKey, {
+          type: "progress",
+          completed: state.completed,
+          failed: state.failed,
+          total: state.total,
+          currentTicker: item.ticker,
+        });
+      },
+    },
+  )
+    .then((state) => {
+      if (state.status !== "complete") return;
+      console.log(
+        `[scheduler] Batch ${weekLabel} finished: ${state.completed}/${state.total} complete, ${state.failed} failed`,
+      );
+      // Single-process runner resolves once, so these fire exactly once.
+      progressEmitter.emit(eventKey, {
+        type: "batch_complete",
+        completed: state.completed,
+        failed: state.failed,
+        total: state.total,
+        failures: state.failures,
+      });
+      progressEmitter.emit("monitoring:digest", {
+        weekLabel,
+        completed: state.completed,
+        failed: state.failed,
+        total: state.total,
+      });
+    })
+    .catch((err) => {
+      console.error(`[scheduler] Batch ${weekLabel} runner crashed:`, err);
+    });
 
   console.log(
-    `[scheduler] Enqueued ${activeHoldings.length} monitoring jobs for ${weekLabel}`,
+    `[scheduler] Started ${pending.length} monitoring jobs for ${weekLabel}`,
   );
-  return { weekLabel, total: activeHoldings.length };
+  return { weekLabel, total: pending.length, done };
 }
 
 export function startScheduler(): void {

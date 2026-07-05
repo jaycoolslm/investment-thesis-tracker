@@ -22,8 +22,8 @@ See `CLAUDE.md` for the full architecture, project structure, and conventions.
 Three terminals — infra in containers, backend + frontend on the host with hot-reload.
 
 ```bash
-# 1. Infrastructure (Postgres + Redis)
-docker compose up -d postgres redis
+# 1. Infrastructure (Postgres)
+docker compose up -d postgres
 
 # 2. One-time DB setup
 pnpm install
@@ -42,10 +42,10 @@ Open <http://localhost:5173>. Vite proxies `/api` to the backend on 3001.
 ### Tests
 
 ```bash
-pnpm test                 # 68 backend unit tests
-pnpm test:integration     # 40 integration tests (Testcontainers — needs Docker)
-cd web && pnpm test       # 28 frontend component tests
-pnpm test:e2e             # 9 Playwright E2E tests (needs Docker + dev servers)
+pnpm test                 # 78 backend unit tests
+pnpm test:integration     # 49 integration tests (Testcontainers — needs Docker)
+cd web && pnpm test       # 27 frontend component tests
+pnpm test:e2e             # 11 Playwright E2E tests (needs Docker + dev servers)
 ```
 
 `MOCK_AGENT=true` makes the AI calls return fixture data — used by E2E tests and useful for local demo without burning Azure OpenAI credits.
