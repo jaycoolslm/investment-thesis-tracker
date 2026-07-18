@@ -4,6 +4,7 @@ import { getBatch, type BatchState } from "../services/batch-runner.js";
 import { runMonitoringBatch, monitoringBatchId } from "../jobs/scheduler.js";
 import { getCurrentWeek } from "../services/weekly-monitoring.js";
 import { db } from "../db/index.js";
+import { config } from "../config.js";
 
 export const monitoringRouter = Router();
 
@@ -139,4 +140,23 @@ monitoringRouter.get("/monitoring/history", async (_req, res) => {
       startedAt: r.started_at,
     })),
   );
+});
+
+// GET /api/provider/health — Proxy to the data provider's /health so the browser
+// never talks cross-origin to the provider. Hidden in the UI when unconfigured.
+monitoringRouter.get("/provider/health", async (_req, res) => {
+  if (!config.DATA_PROVIDER_URL) {
+    res.status(503).json({ error: "Data provider not configured" });
+    return;
+  }
+
+  try {
+    const upstream = await fetch(`${config.DATA_PROVIDER_URL}/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    const body = await upstream.json();
+    res.status(upstream.status).json(body);
+  } catch {
+    res.status(503).json({ error: "Data provider unreachable" });
+  }
 });

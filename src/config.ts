@@ -10,6 +10,7 @@ const envSchema = z.object({
   AZURE_OPENAI_API_KEY: z.string().optional().transform((v) => v || undefined),
   MONITORING_CRON_SCHEDULE: z.string().default("0 6 * * 1"),
   MONITORING_CONCURRENCY: z.coerce.number().int().positive().default(10),
+  DATA_PROVIDER_URL: z.string().url().optional().or(z.literal("")),
 });
 
 const parsed = envSchema.safeParse(process.env);

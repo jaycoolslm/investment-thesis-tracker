@@ -37,7 +37,26 @@ vi.mock("../../db/index.js", () => ({
 }));
 
 const { createApp } = await import("../../app.js");
+const { deriveFileType } = await import("../documents.js");
 const app = createApp();
+
+describe("deriveFileType (upload mimetype filter)", () => {
+  it("maps PDF, DOCX, and Markdown mimetypes to their fileType", () => {
+    expect(deriveFileType("application/pdf")).toBe("PDF");
+    expect(
+      deriveFileType(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ),
+    ).toBe("DOCX");
+    expect(deriveFileType("text/markdown")).toBe("MD");
+  });
+
+  it("rejects disallowed mimetypes (e.g. text/plain)", () => {
+    expect(deriveFileType("text/plain")).toBeNull();
+    expect(deriveFileType("image/png")).toBeNull();
+    expect(deriveFileType("")).toBeNull();
+  });
+});
 
 describe("GET /api/holdings/:id/documents", () => {
   beforeEach(() => {

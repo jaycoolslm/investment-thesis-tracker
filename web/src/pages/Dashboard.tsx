@@ -7,6 +7,7 @@ import { EmptyState } from "../components/EmptyState.tsx";
 import { SearchBar } from "../components/SearchBar.tsx";
 import { FilterChips } from "../components/FilterChips.tsx";
 import { MonitoringHistory } from "../components/MonitoringHistory.tsx";
+import { ProviderHealthCard } from "../components/ProviderHealthCard.tsx";
 
 interface LayoutContext {
   onAddHolding: () => void;
@@ -91,6 +92,7 @@ export function Dashboard() {
             />
           </div>
           <MonitoringHistory />
+          <ProviderHealthCard />
         </>
       )}
     </div>

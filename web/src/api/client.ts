@@ -247,3 +247,44 @@ export interface MonitoringHistoryEntry {
 export function getMonitoringHistory(): Promise<MonitoringHistoryEntry[]> {
   return apiFetch("/api/monitoring/history");
 }
+
+// Data provider health
+
+export interface ProviderCrawlRun {
+  id: number;
+  source: string;
+  startedAt: string;
+  finishedAt: string | null;
+  articlesSeen: number;
+  articlesNew: number;
+  error: string | null;
+}
+
+export interface ProviderHealth {
+  status: "ok";
+  articleCount: number;
+  bodyCount: number;
+  sources: Array<{
+    source: string;
+    lastRun: ProviderCrawlRun | null;
+  }>;
+}
+
+/**
+ * Fetches data provider health via the tracker proxy. Returns null when the
+ * provider is not configured (503) so the UI can hide the health card; other
+ * failures throw so the query surfaces an error state.
+ */
+export async function getProviderHealth(): Promise<ProviderHealth | null> {
+  const res = await fetch("/api/provider/health");
+  if (res.status === 503) {
+    const body = await res.json().catch(() => ({}));
+    if (body.error === "Data provider not configured") return null;
+    throw new Error(body.error ?? "Data provider unreachable");
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Request failed: ${res.status}`);
+  }
+  return res.json();
+}

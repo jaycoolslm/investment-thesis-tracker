@@ -76,6 +76,11 @@ export function BrokerResearchPanel({ holdingId }: BrokerResearchPanelProps) {
               <span className="text-sm font-medium text-brand-900 truncate max-w-[300px]">
                 {doc.filename}
               </span>
+              {doc.fileType === "MD" && (
+                <span className="inline-flex items-center rounded-full bg-accent-100 px-2 py-0.5 text-xs font-medium text-accent-700">
+                  News article
+                </span>
+              )}
               <span className="text-xs text-brand-500">
                 {formatFileSize(doc.fileSize)}
               </span>

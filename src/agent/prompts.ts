@@ -61,8 +61,12 @@ INSTRUCTIONS:
   if (researchFilePaths.length > 0) {
     prompt += `
 
-BROKER RESEARCH FILES (read these for additional context):
+CONTEXT DOCUMENTS (broker research and news articles saved for this holding — read these):
 ${researchFilePaths.map((p) => `- ${p}`).join("\n")}
+
+Files named article__*.md are news articles matched to this holding; each has
+frontmatter with the source URL and a \`rationale\` line explaining its relevance
+to the thesis. Weigh them as evidence and cite their URLs in the sources.
 
 Incorporate relevant insights from these documents into the thesis. Cite them in the sources.`;
   }
@@ -145,8 +149,12 @@ Be specific and evidence-based. Every claim must have a source.`;
   if (researchFilePaths.length > 0) {
     prompt += `
 
-BROKER RESEARCH FILES (read these for additional context):
+CONTEXT DOCUMENTS (broker research and news articles saved for this holding — read these):
 ${researchFilePaths.map((p) => `- ${p}`).join("\n")}
+
+Files named article__*.md are news articles matched to this holding; each has
+frontmatter with the source URL and a \`rationale\` line explaining its relevance
+to the thesis. Weigh them as evidence and cite their URLs in the sources.
 
 Incorporate relevant insights from these documents. Cite them in the sources section.`;
   }

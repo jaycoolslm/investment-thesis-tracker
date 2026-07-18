@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildGenerationPrompt } from "../prompts.js";
-import { VALID_GENERATION_INPUT, GENERATION_INPUT_WITH_FILES } from "./fixtures.js";
+import { buildGenerationPrompt, buildWeeklyPrompt } from "../prompts.js";
+import {
+  VALID_GENERATION_INPUT,
+  GENERATION_INPUT_WITH_FILES,
+  VALID_WEEKLY_ANALYSIS_INPUT,
+} from "./fixtures.js";
 
 describe("buildGenerationPrompt", () => {
   it("includes ticker and company name", () => {
@@ -37,15 +41,48 @@ describe("buildGenerationPrompt", () => {
     expect(prompt).toContain("financial");
   });
 
-  it("omits broker research section when no files", () => {
+  it("omits context documents section when no files", () => {
     const prompt = buildGenerationPrompt(VALID_GENERATION_INPUT);
-    expect(prompt).not.toContain("BROKER RESEARCH FILES");
+    expect(prompt).not.toContain("CONTEXT DOCUMENTS");
   });
 
-  it("includes broker research section with file paths", () => {
+  it("includes context documents section with file paths", () => {
     const prompt = buildGenerationPrompt(GENERATION_INPUT_WITH_FILES);
-    expect(prompt).toContain("BROKER RESEARCH FILES");
+    expect(prompt).toContain("CONTEXT DOCUMENTS");
     expect(prompt).toContain("shell-broker-report.pdf");
     expect(prompt).toContain("shell-earnings-q4.docx");
+  });
+
+  it("explains the article__*.md news-article convention", () => {
+    const prompt = buildGenerationPrompt(GENERATION_INPUT_WITH_FILES);
+    expect(prompt).toContain("article__*.md");
+    expect(prompt).toContain("rationale");
+  });
+});
+
+describe("buildWeeklyPrompt", () => {
+  it("omits context documents section when no files", () => {
+    const prompt = buildWeeklyPrompt(VALID_WEEKLY_ANALYSIS_INPUT);
+    expect(prompt).not.toContain("CONTEXT DOCUMENTS");
+  });
+
+  it("lists document file paths under the context documents heading", () => {
+    const articlePath =
+      "/data/documents/abc-123/article__ft__478fe638-84d5-4eab-a2c5-5b43ec106bdf.md";
+    const prompt = buildWeeklyPrompt({
+      ...VALID_WEEKLY_ANALYSIS_INPUT,
+      researchFilePaths: [articlePath],
+    });
+    expect(prompt).toContain("CONTEXT DOCUMENTS");
+    expect(prompt).toContain(articlePath);
+  });
+
+  it("explains the article__*.md news-article convention", () => {
+    const prompt = buildWeeklyPrompt({
+      ...VALID_WEEKLY_ANALYSIS_INPUT,
+      researchFilePaths: ["/data/documents/abc/article__ft__x.md"],
+    });
+    expect(prompt).toContain("article__*.md");
+    expect(prompt).toContain("rationale");
   });
 });
