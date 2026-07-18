@@ -31,6 +31,11 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      DATA_PROVIDER_URL: ${DATA_PROVIDER_URL:-}
+    extra_hosts:
+      # Lets host.docker.internal resolve to the host on Linux Docker Engine,
+      # so the containerised API can reach a provider running on the host.
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data/documents:/data/documents
 
